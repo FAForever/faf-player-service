@@ -9,6 +9,9 @@ import com.faforever.server.message.client.dto.AvatarInfo;
 import com.faforever.server.message.service.InboundLobbyMessage;
 import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
+import com.faforever.server.micrometer.InboundMessageCommandResolver;
+import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.aop.MeterTag;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +48,9 @@ public class PlayerService {
 
     @Incoming("admin-inbound")
     @MDCPopulated
-    public void handleAdminRequest(InboundLobbyMessage<AdminMessage.Client> request) {
+    @Timed(value = "faf.admin.request", histogram = true)
+    public void handleAdminRequest(@MeterTag(value = "command",
+                                             resolver = InboundMessageCommandResolver.class) InboundLobbyMessage<AdminMessage.Client> request) {
         switch (request.message()) {
             case AdminMessage.BroadcastRequest broadcastRequest -> broadcast(request.playerId(), broadcastRequest);
             case AdminMessage.KickPlayerRequest kickPlayerRequest -> kickPlayer(request.playerId(), kickPlayerRequest);
@@ -96,8 +101,10 @@ public class PlayerService {
     }
 
     @Incoming("social-inbound")
+    @Timed(value = "faf.social.request", histogram = true)
     @MDCPopulated
-    public void handleSocialRequest(InboundLobbyMessage<SocialMessage.Client> request) {
+    public void handleSocialRequest(@MeterTag(value = "command",
+                                              resolver = InboundMessageCommandResolver.class) InboundLobbyMessage<SocialMessage.Client> request) {
         int playerId = request.playerId();
         switch (request.message()) {
             case SocialMessage.ListAvatarsRequest(String requestId) -> {

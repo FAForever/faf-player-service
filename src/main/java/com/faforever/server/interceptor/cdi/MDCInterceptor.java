@@ -2,7 +2,6 @@ package com.faforever.server.interceptor.cdi;
 
 import com.faforever.server.message.client.LobbyMessage;
 import com.faforever.server.message.service.InboundLobbyMessage;
-import com.faforever.server.message.service.PlayerSessionState;
 import jakarta.annotation.Priority;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
@@ -15,10 +14,10 @@ import org.slf4j.MDC;
 @Interceptor
 public class MDCInterceptor {
 
-    private static final String COMMAND = "command";
-    private static final String REQUEST_ID = "requestId";
-    private static final String PLAYER_ID = "playerId";
-    private static final String SESSION_ID = "sessionId";
+    public static final String COMMAND = "command";
+    public static final String REQUEST_ID = "requestId";
+    public static final String PLAYER_ID = "playerId";
+    public static final String SESSION_ID = "sessionId";
 
     @AroundInvoke
     Object logInvocation(InvocationContext context) throws Exception {
@@ -34,11 +33,6 @@ public class MDCInterceptor {
                     hasMessage = true;
                     MDC.put(REQUEST_ID, message.requestId());
                     MDC.put(COMMAND, message.command());
-                    hasSession = true;
-                    MDC.put(SESSION_ID, String.valueOf(sessionId));
-                    MDC.put(PLAYER_ID, String.valueOf(playerId));
-                }
-                case PlayerSessionState(int playerId, long sessionId, _) -> {
                     hasSession = true;
                     MDC.put(SESSION_ID, String.valueOf(sessionId));
                     MDC.put(PLAYER_ID, String.valueOf(playerId));

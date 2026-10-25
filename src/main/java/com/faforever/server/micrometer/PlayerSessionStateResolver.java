@@ -6,7 +6,7 @@ import jakarta.inject.Singleton;
 import org.jspecify.annotations.Nullable;
 
 @Singleton
-public class PlayerSessionStateCommandResolver implements ValueResolver {
+public class PlayerSessionStateResolver implements ValueResolver {
     @Override
     public String resolve(@Nullable Object parameter) {
         return switch (parameter) {
