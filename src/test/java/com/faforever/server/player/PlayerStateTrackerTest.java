@@ -71,10 +71,6 @@ class PlayerStateTrackerTest {
     @InjectMock
     private PlayerRepository playerRepository;
     @InjectMock
-    private FriendOrFoeRepository friendOrFoeRepository;
-    @InjectMock
-    private AssignedAvatarRepository assignedAvatarRepository;
-    @InjectMock
     private UserGroupAssignmentRepository userGroupAssignmentRepository;
 
     private final Player player = new Player(PLAYER_ID, "test");

@@ -231,6 +231,6 @@ Build a runnable jar:
 ./gradlew build
 ```
 
-Container images can be built using the provided Dockerfiles under `src/docker/`:
+Container images can be built using the provided Dockerfiles under `src/main/docker`:
 - `Dockerfile.jvm` - Standard JVM deployment image
 - `Dockerfile.native` - GraalVM native binary image

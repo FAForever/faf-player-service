@@ -3,7 +3,6 @@ package com.faforever.server.message.client.dto;
 import com.faforever.server.rating.LeaderboardRating;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
-import org.jspecify.annotations.NonNull;
 
 import java.util.List;
 
@@ -27,7 +26,7 @@ public record LeaderboardStats(
         }
     }
 
-    static @NonNull LeaderboardStats from(LeaderboardRating leaderboardRating) {
+    static LeaderboardStats from(LeaderboardRating leaderboardRating) {
         Rating rating = new Rating(leaderboardRating.mean(), leaderboardRating.deviation());
         return new LeaderboardStats(leaderboardRating.totalGames(), rating);
     }
