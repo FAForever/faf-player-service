@@ -13,8 +13,10 @@ import com.faforever.server.message.service.PlayerSessionState;
 import com.faforever.server.rating.Leaderboard;
 import com.faforever.server.rating.LeaderboardRating;
 import com.faforever.server.rating.LeaderboardRatingRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.junit.jupiter.api.BeforeEach;
@@ -302,5 +304,8 @@ class PlayerStateTrackerTest {
             assertThat(playerStateTracker.getDirtyPlayers(), hasSize(0));
             assertEquals(Player.State.ONLINE, player.getState());
         }
+
+        @ApplicationScoped
+        static class TestMeterRegistry extends SimpleMeterRegistry {}
     }
 }
