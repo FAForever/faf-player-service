@@ -48,7 +48,7 @@ public class PlayerService {
 
     @Incoming("admin-inbound")
     @MDCPopulated
-    @Timed(value = "faf.admin.request", histogram = true)
+    @Timed(value = "faf.request", extraTags = {"type", "admin"}, histogram = true)
     public void handleAdminRequest(@MeterTag(value = "command",
                                              resolver = InboundMessageCommandResolver.class) InboundLobbyMessage<AdminMessage.Client> request) {
         switch (request.message()) {
@@ -101,7 +101,7 @@ public class PlayerService {
     }
 
     @Incoming("social-inbound")
-    @Timed(value = "faf.social.request", histogram = true)
+    @Timed(value = "faf.request", extraTags = {"type", "social"}, histogram = true)
     @MDCPopulated
     public void handleSocialRequest(@MeterTag(value = "command",
                                               resolver = InboundMessageCommandResolver.class) InboundLobbyMessage<SocialMessage.Client> request) {
