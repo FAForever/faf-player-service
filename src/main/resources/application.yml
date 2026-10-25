@@ -1,0 +1,135 @@
+quarkus:
+  log:
+    level: INFO
+    console:
+      format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c] (%t) %s %X%e%n"
+  devservices:
+    enabled: false
+  application:
+    name: faf-player-service
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  datasource:
+    db-kind: mariadb
+    username: ${DATABASE_USERNAME:faf-player-service}
+    password: ${DATABASE_PASSWORD:banana}
+    jdbc:
+      url: jdbc:mariadb://${DATABASE_HOST:localhost}:${DATABASE_PORT:3306}/${DATABASE_NAME:faf_lobby}?ssl=false
+  management:
+    enabled: true
+  http:
+    host-enabled: false
+
+rabbitmq-host: ${RABBITMQ_HOST:localhost}
+rabbitmq-port: ${RABBITMQ_PORT:5672}
+rabbitmq-username: ${RABBITMQ_USER:faf-lobby-server}
+rabbitmq-password: ${RABBITMQ_PASSWORD:banana}
+rabbitmq-virtual-host: ${RABBITMQ_VHOST:/faf-core}
+
+faf:
+  instance-id: ${HOSTNAME:local}
+
+mp:
+  messaging:
+    outgoing:
+      lobby-outbound:
+        connector: smallrye-rabbitmq
+        exchange:
+          name: lobby-message-outbound
+      lobby-schema-registration:
+        connector: smallrye-rabbitmq
+        exchange:
+          name: lobby-schema-register
+      player-session-request:
+        connector: smallrye-rabbitmq
+        exchange:
+          name: lobby-session-request
+      avatar-updates-out:
+        connector: smallrye-rabbitmq
+        exchange:
+          name: faf-lobby
+    incoming:
+      social-inbound:
+        connector: smallrye-rabbitmq
+        queue:
+          name: player.message.social.${faf.instance-id}
+          exclusive: true
+          durable: true
+          auto-delete: true
+        exchange:
+          name: lobby-message-inbound
+        routing-keys: lobby.social.#
+      admin-inbound:
+        connector: smallrye-rabbitmq
+        queue:
+          name: player.message.admin.${faf.instance-id}
+          exclusive: true
+          durable: true
+          auto-delete: true
+        exchange:
+          name: lobby-message-inbound
+        routing-keys: lobby.admin.#
+      player-session-state:
+        connector: smallrye-rabbitmq
+        queue:
+          name: player.session.state.${faf.instance-id}
+          exclusive: true
+          durable: true
+          auto-delete: true
+        exchange:
+          name: lobby-session-state
+          durable: true
+      lobby-schema-request:
+        connector: smallrye-rabbitmq
+        exchange:
+          name: lobby-schema-request
+        queue:
+          name: player.schema.request.${faf.instance-id}
+          exclusive: true
+          durable: true
+          auto-delete: true
+      avatar-updates:
+        connector: smallrye-rabbitmq
+        exchange:
+          name: faf-lobby
+        queue:
+          name: player.avatar.updates.${faf.instance-id}
+          exclusive: true
+          durable: true
+          auto-delete: true
+        routing-keys: success.player_avatar.update
+
+"%test":
+  quarkus:
+    scheduler:
+      enabled: false
+    log:
+      console:
+        json:
+          enabled: false
+      category:
+        "com.faforever":
+          level: DEBUG
+        "io.quarkus.websockets.next.traffic":
+          level: DEBUG
+
+"%dev":
+  quarkus:
+    live-reload:
+      instrumentation: true
+    log:
+      console:
+        json:
+          enabled: false
+      category:
+        "com.faforever":
+          level: DEBUG
+        "io.quarkus.websockets.next.traffic":
+          level: DEBUG
+    websockets-next:
+      server:
+        traffic-logging:
+          enabled: true
+    hibernate-orm:
+      log:
+        sql: true
