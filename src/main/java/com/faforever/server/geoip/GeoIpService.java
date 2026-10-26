@@ -6,7 +6,6 @@ import com.maxmind.geoip2.exception.GeoIp2Exception;
 import com.maxmind.geoip2.model.CountryResponse;
 import io.micrometer.core.annotation.Timed;
 import jakarta.inject.Singleton;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jspecify.annotations.Nullable;
@@ -18,12 +17,11 @@ import java.nio.file.Path;
 
 @Slf4j
 @Singleton
-@RequiredArgsConstructor
 public class GeoIpService {
 
     private final @Nullable DatabaseReader databaseReader;
 
-    GeoIpService(@ConfigProperty(name = "geo-ip.database-path") Path geoIpDatabasePath) {
+    public GeoIpService(@ConfigProperty(name = "geo-ip.database-path") Path geoIpDatabasePath) {
         DatabaseReader possibleDatabaseReader;
         try {
             if (Files.exists(geoIpDatabasePath)) {
