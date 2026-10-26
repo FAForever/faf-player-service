@@ -60,7 +60,7 @@ public class GeoIpService {
             return "";
         }
 
-        if (country == null || country.getCountry() == null) {
+        if (country == null || country.getCountry() == null || country.getCountry().getIsoCode() == null) {
             LOG.warn("Unable to identify country for ip address {}", ipAddress);
             return "";
         }
