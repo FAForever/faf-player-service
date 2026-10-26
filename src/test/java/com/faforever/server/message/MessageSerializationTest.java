@@ -295,38 +295,45 @@ public class MessageSerializationTest {
                 {
                     "player_id": 1,
                     "session_id": 2,
+                             "ip_address": "127.0.0.1",
                     "state": {
                       "@type": "new",
                       "seconds_to_expiry": 120
                     }
                 }
                 """;
-        PlayerSessionState expectedNew = new PlayerSessionState(1, 2, new PlayerSessionState.State.New(Duration.ofMinutes(2)));
+        PlayerSessionState expectedNew = new PlayerSessionState(1, 2, "127.0.0.1", new PlayerSessionState.State.New(
+                Duration.ofMinutes(2)));
         assertEquals(expectedNew, jsonMapper.readValue(newJson, PlayerSessionState.class));
 
         String existingJson = """
                 {
                     "player_id": 1,
                     "session_id": 2,
+                                  "ip_address": "127.0.0.1",
                     "state": {
                       "@type": "existing",
                       "seconds_to_expiry": 120
                     }
                 }
                 """;
-        PlayerSessionState expectedExisting = new PlayerSessionState(1, 2, new PlayerSessionState.State.Existing(Duration.ofMinutes(2)));
+        PlayerSessionState expectedExisting = new PlayerSessionState(1, 2, "127.0.0.1",
+                                                                     new PlayerSessionState.State.Existing(
+                                                                             Duration.ofMinutes(2)));
         assertEquals(expectedExisting, jsonMapper.readValue(existingJson, PlayerSessionState.class));
 
         String goneJson = """
                 {
                     "player_id": 1,
                     "session_id": 2,
+                              "ip_address": "127.0.0.1",
                     "state": {
                       "@type": "gone"
                     }
                 }
                 """;
-        PlayerSessionState expectedGone = new PlayerSessionState(1, 2, new PlayerSessionState.State.Gone());
+        PlayerSessionState expectedGone = new PlayerSessionState(1, 2, "127.0.0.1",
+                                                                 new PlayerSessionState.State.Gone());
         assertEquals(expectedGone, jsonMapper.readValue(goneJson, PlayerSessionState.class));
     }
 }

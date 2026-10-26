@@ -1,5 +1,6 @@
 package com.faforever.server.player;
 
+import com.faforever.server.geoip.GeoIpService;
 import com.faforever.server.message.client.ConnectionMessage;
 import com.faforever.server.message.client.LobbyMessage;
 import com.faforever.server.message.client.SocialMessage;
@@ -61,9 +62,11 @@ class PlayerStateTrackerTest {
 
     @Inject
     PlayerStateTracker playerStateTracker;
+
+    @InjectMock
+    private GeoIpService geoIpService;
     @InjectMock
     private AvatarRepository avatarRepository;
-
     @InjectMock
     private LeaderboardRatingRepository leaderboardRatingRepository;
     @InjectMock
@@ -97,9 +100,13 @@ class PlayerStateTrackerTest {
         @Test
         void testRegisterSession() {
             when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(player);
+            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.New(
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
                     Duration.ofSeconds(1))));
+
+            verify(playerRepository).updatePlayerIpAddress(PLAYER_ID, "127.0.0.1");
 
             assertThat(playerStateTracker.getDirtyPlayers(), contains(player));
 
@@ -144,10 +151,12 @@ class PlayerStateTrackerTest {
         @Test
         void testRegisterSessionAsModerator() {
             when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(player);
+            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
             when(userGroupAssignmentRepository.isPlayerModerator(PLAYER_ID)).thenReturn(true);
 
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.New(
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
                     Duration.ofSeconds(1))));
 
             ArgumentCaptor<OutboundLobbyMessage<LobbyMessage.Server>> messageRequestCaptor = captor();
@@ -175,7 +184,8 @@ class PlayerStateTrackerTest {
 
         @Test
         void testUnregisterSession() {
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.Gone()));
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Gone()));
 
             assertThat(playerStateTracker.getDirtyPlayers(), hasSize(0));
         }
@@ -187,31 +197,38 @@ class PlayerStateTrackerTest {
         @BeforeEach
         void setup() {
             when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(player);
+            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.Existing(
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
                     Duration.ofMinutes(1))));
         }
 
         @Test
         void testDoubleRegistrationThrowsWhenDifferentPlayers() {
             when(playerRepository.loadPlayer(2)).thenReturn(new Player(2, "test"));
-            assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(2, SESSION_ID, new PlayerSessionState.State.New(
+            assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(2, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
                     Duration.ofSeconds(1)))));
-            assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(2, SESSION_ID, new PlayerSessionState.State.Existing(
+            assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(2, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
                     Duration.ofSeconds(1)))));
         }
 
         @Test
         void testDoubleRegistrationDoesNotThrowWhenSamePlayer() {
-            assertDoesNotThrow(() -> playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.New(
+            assertDoesNotThrow(() -> playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
                     Duration.ofSeconds(1)))));
-            assertDoesNotThrow(() -> playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.Existing(
+            assertDoesNotThrow(() -> playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
                     Duration.ofSeconds(1)))));
         }
 
         @Test
         void testUnregisterSession() {
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.Gone()));
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Gone()));
 
             assertEquals(Player.State.OFFLINE, player.getState());
             assertThat(playerStateTracker.getDirtyPlayers(), contains(player));
@@ -219,16 +236,19 @@ class PlayerStateTrackerTest {
 
         @Test
         void testUnregisterNonRegisteredSession() {
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, 2, new PlayerSessionState.State.Gone()));
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, 2, "127.0.0.1", new PlayerSessionState.State.Gone()));
 
             assertThat(playerStateTracker.getDirtyPlayers(), hasSize(0));
         }
 
         @Test
         void testUnregisterSessionMultipleSessions() {
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, 2, new PlayerSessionState.State.New(
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, 2, "127.0.0.1", new PlayerSessionState.State.New(
                     Duration.ofSeconds(1))));
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.Gone()));
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Gone()));
 
             assertEquals(Player.State.ONLINE, player.getState());
         }
@@ -288,7 +308,8 @@ class PlayerStateTrackerTest {
 
         @Test
         void testExpiredSession() {
-            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, new PlayerSessionState.State.Existing(
+            playerStateTracker.handlePlayerSessionStatus(
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
                     Duration.ofNanos(-1))));
 
             playerStateTracker.removeExpiredSessions();

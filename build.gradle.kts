@@ -36,6 +36,8 @@ dependencies {
     implementation("io.quarkus:quarkus-micrometer-registry-prometheus")
     implementation("io.quarkus:quarkus-smallrye-health")
 
+    implementation("com.maxmind.geoip2:geoip2:4.4.0")
+
     val jsonSchemaVersion = "5.0.0"
     implementation("com.github.victools:jsonschema-generator:$jsonSchemaVersion")
     implementation("com.github.victools:jsonschema-module-jackson:$jsonSchemaVersion")

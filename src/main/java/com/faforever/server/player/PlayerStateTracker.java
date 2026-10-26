@@ -1,7 +1,9 @@
 package com.faforever.server.player;
 
 import com.faforever.server.domain.FriendOrFoeEntity;
+import com.faforever.server.geoip.GeoIpService;
 import com.faforever.server.interceptor.cdi.MDCInterceptor;
+import com.faforever.server.interceptor.cdi.MDCPopulated;
 import com.faforever.server.message.client.ConnectionMessage;
 import com.faforever.server.message.client.LobbyMessage;
 import com.faforever.server.message.client.SocialMessage;
@@ -42,6 +44,8 @@ import java.util.stream.Collectors;
 @RunOnVirtualThread
 class PlayerStateTracker {
 
+    private final GeoIpService geoIpService;
+
     private final Emitter<Map<String, String>> playerConnectionsRequestEmitter;
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
 
@@ -61,11 +65,15 @@ class PlayerStateTracker {
 
     private Instant lastRatingUpdateTime = Instant.now();
 
-    PlayerStateTracker(
-            @Channel("player-session-request") Emitter<Map<String, String>> playerConnectionsRequestEmitter, @Channel("lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
-            PlayerRepository playerRepository, AvatarRepository avatarRepository, FriendOrFoeRepository friendOrFoeRepository,
-            UserGroupAssignmentRepository userGroupAssignmentRepository,
-            LeaderboardRatingRepository leaderboardRatingRepository, MeterRegistry meterRegistry) {
+    PlayerStateTracker(GeoIpService geoIpService,
+                       @Channel("player-session-request") Emitter<Map<String, String>> playerConnectionsRequestEmitter,
+                       @Channel(
+                               "lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
+                       PlayerRepository playerRepository, AvatarRepository avatarRepository,
+                       FriendOrFoeRepository friendOrFoeRepository,
+                       UserGroupAssignmentRepository userGroupAssignmentRepository,
+                       LeaderboardRatingRepository leaderboardRatingRepository, MeterRegistry meterRegistry) {
+        this.geoIpService = geoIpService;
         this.playerConnectionsRequestEmitter = playerConnectionsRequestEmitter;
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
         this.playerRepository = playerRepository;
@@ -86,25 +94,33 @@ class PlayerStateTracker {
 
     @Incoming("player-session-state")
     @Timed(value = "faf.player.session.update", histogram = true)
+    @MDCPopulated
     void handlePlayerSessionStatus(@MeterTag(key = "state",
                                              resolver = PlayerSessionStateResolver.class) PlayerSessionState playerSessionStatus) {
         switch (playerSessionStatus.state()) {
-            case PlayerSessionState.State.New(Duration secondsToExpiry) -> registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
-                                                                                                 true, secondsToExpiry);
+            case PlayerSessionState.State.New(Duration secondsToExpiry) ->
+                    registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
+                                          playerSessionStatus.ipAddress(), true, secondsToExpiry);
 
-            case PlayerSessionState.State.Existing(Duration secondsToExpiry) -> registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
-                                                   false, secondsToExpiry);
-            case PlayerSessionState.State.Gone() -> unregisterPlayerSession(playerSessionStatus.sessionId(),
-                                                          playerSessionStatus.playerId());
+            case PlayerSessionState.State.Existing(Duration secondsToExpiry) ->
+                    registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
+                                          playerSessionStatus.ipAddress(), false, secondsToExpiry);
+            case PlayerSessionState.State.Gone() ->
+                    unregisterPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId());
         }
     }
 
-    private void registerPlayerSession(long sessionId, int playerId, boolean newConnection, Duration secondsToExpiry) {
+    private void registerPlayerSession(long sessionId, int playerId, String ipAddress, boolean newConnection,
+                                       Duration secondsToExpiry) {
         LOG.atDebug()
            .addKeyValue(MDCInterceptor.SESSION_ID, sessionId)
            .addKeyValue(MDCInterceptor.PLAYER_ID, playerId)
            .log("Registering session");
-        Player player = playerIdMap.computeIfAbsent(playerId, playerRepository::loadPlayer);
+        Player player = playerIdMap.computeIfAbsent(playerId, key -> {
+            Player loadedPlayer = playerRepository.loadPlayer(key);
+            loadedPlayer.setCountry(geoIpService.findCountry(ipAddress));
+            return loadedPlayer;
+        });
         Player existingPlayer = sessionPlayerMap.putIfAbsent(sessionId, player);
         if (existingPlayer != null && existingPlayer != player) {
             throw new IllegalStateException(
@@ -128,6 +144,7 @@ class PlayerStateTracker {
            .addKeyValue(MDCInterceptor.SESSION_ID, sessionId)
            .addKeyValue(MDCInterceptor.PLAYER_ID, playerId)
            .log("Registered new session");
+        playerRepository.updatePlayerIpAddress(playerId, ipAddress);
         sendWelcomeMessages(sessionId, player);
         dirtyPlayers.add(player);
     }
@@ -191,7 +208,8 @@ class PlayerStateTracker {
     @Incoming("avatar-updates")
     @Timed(value = "faf.player.avatar", histogram = true)
     void handlePlayerAvatar(PlayerAvatarUpdate playerAvatarUpdate) {
-        LOG.info("Updating avatar for player id {} to avatar id {}", playerAvatarUpdate.playerId(), playerAvatarUpdate.avatarId());
+        LOG.info("Updating avatar for player id {} to avatar id {}", playerAvatarUpdate.playerId(),
+                 playerAvatarUpdate.avatarId());
         updatePlayer(playerAvatarUpdate.playerId(), player -> {
             if (playerAvatarUpdate.avatarId() == null) {
                 player.clearAvatar();
@@ -201,15 +219,17 @@ class PlayerStateTracker {
         });
     }
 
-    @Scheduled(every = "1m", skipExecutionIf = Scheduled.ApplicationNotRunning.class, concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @Scheduled(every = "1m", skipExecutionIf = Scheduled.ApplicationNotRunning.class,
+               concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Timed(value = "faf.player.session.remove", histogram = true)
     void removeExpiredSessions() {
         Instant evaluationTime = Instant.now();
 
-        Set<Long> expiredSessionIds = sessionExpirationMap.entrySet().stream()
-                .filter(entry -> evaluationTime.isAfter(entry.getValue()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toSet());
+        Set<Long> expiredSessionIds = sessionExpirationMap.entrySet()
+                                                          .stream()
+                                                          .filter(entry -> evaluationTime.isAfter(entry.getValue()))
+                                                          .map(Map.Entry::getKey)
+                                                          .collect(Collectors.toSet());
         if (expiredSessionIds.isEmpty()) {
             LOG.debug("No expired sessions found");
             return;
@@ -224,7 +244,8 @@ class PlayerStateTracker {
         });
     }
 
-    @Scheduled(every = "1m", skipExecutionIf = Scheduled.ApplicationNotRunning.class, concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @Scheduled(every = "1m", skipExecutionIf = Scheduled.ApplicationNotRunning.class,
+               concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Timed(value = "faf.player.leaderboard.update", histogram = true)
     void updatePlayerLeaderboardRatings() {
         Instant currentRatingUpdateTime = lastRatingUpdateTime;
@@ -244,7 +265,8 @@ class PlayerStateTracker {
                                                                                             newLeaderboardRatings)));
     }
 
-    @Scheduled(every = "1s", skipExecutionIf = Scheduled.ApplicationNotRunning.class, concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @Scheduled(every = "1s", skipExecutionIf = Scheduled.ApplicationNotRunning.class,
+               concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Timed(value = "faf.player.dirty.update", histogram = true)
     void sendUpdateForDirtyPlayers() {
         Set<Player> frozenDirtyPlayers = Set.copyOf(dirtyPlayers);

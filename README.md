@@ -91,6 +91,12 @@ The `PlayerStateTracker` maintains concurrent in-memory maps of online players a
 
 When all sessions for a player disconnect or expire, the player is transitioned to `OFFLINE` and flagged as dirty so an offline update is broadcast to other clients before the player record is purged from memory.
 
+### Player Country Detection
+
+This application makes use of the [GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) database to
+identify players country by ip.
+If this file is not present all players will have no country
+
 ### Session Synchronization
 
 - **Startup Recovery**: On service startup, `PlayerStateTracker` sends a session inquiry over `player-session-request` (`lobby-session-request` exchange) to reconcile all currently active client sessions from the lobby gateway.

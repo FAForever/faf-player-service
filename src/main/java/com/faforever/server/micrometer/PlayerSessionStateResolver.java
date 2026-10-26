@@ -10,9 +10,9 @@ public class PlayerSessionStateResolver implements ValueResolver {
     @Override
     public String resolve(@Nullable Object parameter) {
         return switch (parameter) {
-            case PlayerSessionState(_, _, PlayerSessionState.State.New _) -> "new";
-            case PlayerSessionState(_, _, PlayerSessionState.State.Existing _) -> "existing";
-            case PlayerSessionState(_, _, PlayerSessionState.State.Gone _) -> "gone";
+            case PlayerSessionState(_, _, _, PlayerSessionState.State.New _) -> "new";
+            case PlayerSessionState(_, _, _, PlayerSessionState.State.Existing _) -> "existing";
+            case PlayerSessionState(_, _, _, PlayerSessionState.State.Gone _) -> "gone";
             case null, default -> "";
         };
     }
