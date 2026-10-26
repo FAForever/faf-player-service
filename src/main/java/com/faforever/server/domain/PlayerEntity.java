@@ -22,6 +22,9 @@ public class PlayerEntity extends AbstractEntity {
     @Column(name = "login")
     private String name;
 
+    @Column(name = "ip")
+    private String ip;
+
     @ManyToOne
     @JoinTable(
             name = "clan_membership",

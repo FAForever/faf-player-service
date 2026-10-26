@@ -25,7 +25,9 @@ module com.faforever.server.player {
     requires smallrye.reactive.messaging.rabbitmq;
     requires tools.jackson.databind;
     requires com.fasterxml.classmate;
-
-    requires static lombok;
     requires micrometer.commons;
+    requires io.smallrye.config;
+    requires com.maxmind.geoip2;
+    requires com.maxmind.db;
+    requires static lombok;
 }

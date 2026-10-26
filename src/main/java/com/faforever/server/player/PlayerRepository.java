@@ -15,6 +15,11 @@ class PlayerRepository implements PanacheRepositoryBase<PlayerEntity, Integer> {
     }
 
     @Transactional
+    void updatePlayerIpAddress(int playerId, String ipAddress) {
+        update("set ip = ?1 where id = ?2", ipAddress, playerId);
+    }
+
+    @Transactional
     void removePlayerAvatar(int playerId) {
         update("set avatar = null where player.id = ?2", playerId);
     }
