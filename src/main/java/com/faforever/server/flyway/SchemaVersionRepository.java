@@ -11,7 +11,7 @@ public class SchemaVersionRepository implements PanacheRepositoryBase<SchemaVers
 
     Optional<String> findMaxVersion() {
         return find(
-                "select s.version from SchemaVersion s where s.version is not null order by s.installedRank").project(
+                "select s.version from SchemaVersion s where s.version is not null order by s.installedRank desc").project(
                 String.class).firstResultOptional();
     }
 }
