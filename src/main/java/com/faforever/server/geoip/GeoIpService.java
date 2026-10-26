@@ -23,7 +23,7 @@ public class GeoIpService {
 
     private final @Nullable DatabaseReader databaseReader;
 
-    GeoIpService(@ConfigProperty(name = "geo-ip.database") Path geoIpDatabasePath) {
+    GeoIpService(@ConfigProperty(name = "geo-ip.database-path") Path geoIpDatabasePath) {
         DatabaseReader possibleDatabaseReader;
         try {
             if (Files.exists(geoIpDatabasePath)) {
