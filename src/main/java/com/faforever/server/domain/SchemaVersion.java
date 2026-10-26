@@ -19,4 +19,8 @@ public class SchemaVersion {
 
     @Column(name = "version")
     private String version;
+
+    @Column(name = "success")
+    private boolean success;
+
 }
