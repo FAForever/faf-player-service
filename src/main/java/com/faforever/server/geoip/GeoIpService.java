@@ -5,7 +5,7 @@ import com.maxmind.geoip2.DatabaseReader;
 import com.maxmind.geoip2.exception.GeoIp2Exception;
 import com.maxmind.geoip2.model.CountryResponse;
 import io.micrometer.core.annotation.Timed;
-import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -17,7 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Slf4j
-@ApplicationScoped
+@Singleton
 @RequiredArgsConstructor
 public class GeoIpService {
 
