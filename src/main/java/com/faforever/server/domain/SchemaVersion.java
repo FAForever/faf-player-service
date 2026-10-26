@@ -15,7 +15,7 @@ public class SchemaVersion {
 
     @Id
     @Column(name = "installed_rank")
-    private Integer installedRank;
+    private int installedRank;
 
     @Column(name = "version")
     private String version;
