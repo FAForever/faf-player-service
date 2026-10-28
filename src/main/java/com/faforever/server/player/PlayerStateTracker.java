@@ -252,12 +252,17 @@ class PlayerStateTracker {
         lastRatingUpdateTime = Instant.now();
         Set<Integer> playerIds = Set.copyOf(playerIdMap.keySet());
         if (playerIds.isEmpty()) {
-            LOG.debug("No updated ratings found");
+            LOG.debug("No players connected");
             return;
         }
 
         Map<Integer, Set<LeaderboardRating>> playerIdRatingMap = leaderboardRatingRepository.loadUpdatedLeaderboardRatings(
                 playerIds, currentRatingUpdateTime);
+        if (playerIdRatingMap.isEmpty()) {
+            LOG.debug("No updated ratings found");
+            return;
+        }
+
         LOG.info("Updating ratings for {} players", playerIdRatingMap.size());
 
         playerIdRatingMap.forEach((playerId, newLeaderboardRatings) -> updatePlayer(playerId,

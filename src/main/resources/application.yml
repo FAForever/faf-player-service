@@ -27,7 +27,7 @@ rabbitmq-password: ${RABBITMQ_PASSWORD:banana}
 rabbitmq-virtual-host: ${RABBITMQ_VHOST:/faf-core}
 
 geo-ip:
-  database-path: ${GEO_IP_DATABASE_PATH:/geoip/GeoLite2-City.mmdb}
+  database-path: ${GEO_IP_DATABASE_PATH:/geoip/GeoLite2-Country.mmdb}
 
 faf:
   instance-id: ${HOSTNAME:local}
