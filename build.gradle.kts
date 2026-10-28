@@ -51,6 +51,7 @@ dependencies {
     testImplementation("io.quarkus:quarkus-junit-mockito")
     testImplementation("org.hamcrest:hamcrest")
     testImplementation("org.skyscreamer:jsonassert:1.5.3")
+    testImplementation("com.networknt:json-schema-validator:3.0.8")
 }
 
 testlogger {
