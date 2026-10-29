@@ -10,7 +10,9 @@ class UserGroupAssignmentRepository implements PanacheRepositoryBase<UserGroupAs
 
     @Transactional
     boolean playerLacksPermission(int playerId, String permission) {
-        return count("userId = ?1 and userGroup.groupPermissions.technicalName = ?1", playerId, permission) == 0;
+        return count(
+                "select count(*) from UserGroupAssignment e join e.groupPermissions p where e.userId = ?1 and p.technicalName = ?1",
+                playerId, permission) == 0;
     }
 
     @Transactional
