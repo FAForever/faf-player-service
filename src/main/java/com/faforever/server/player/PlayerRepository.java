@@ -21,12 +21,12 @@ class PlayerRepository implements PanacheRepositoryBase<PlayerEntity, Integer> {
 
     @Transactional
     void removePlayerAvatar(int playerId) {
-        update("set avatar = null where player.id = ?2", playerId);
+        update("set selectedAvatar = null where id = ?1", playerId);
     }
 
     @Transactional
     void updatePlayerAvatar(int playerId, AvatarEntity avatar) {
-        update("set avatar = ?1 where player.id = ?2", avatar, playerId);
+        update("set selectedAvatar = ?1 where id = ?2", avatar, playerId);
     }
 
 }
