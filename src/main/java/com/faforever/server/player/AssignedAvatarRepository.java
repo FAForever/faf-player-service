@@ -26,7 +26,7 @@ class AssignedAvatarRepository implements PanacheRepositoryBase<AssignedAvatarEn
 
     @Transactional
     Avatar updateSelectedAvatar(int playerId, String avatarUrl) {
-        update("set selected = (avatar.url = ?1) where player.id = ?2", avatarUrl, playerId);
+        update("set selected = (avatar.url = ?1) where playerId = ?2", avatarUrl, playerId);
         AvatarEntity avatar = find(
                 "where playerId = ?1 and avatar.url = ?2 and (expirationDate is null or expirationDate < current_timestamp)",
                 playerId, avatarUrl).singleResult().getAvatar();
@@ -36,7 +36,7 @@ class AssignedAvatarRepository implements PanacheRepositoryBase<AssignedAvatarEn
 
     @Transactional
     void removeSelectedAvatar(int playerId) {
-        update("set selected = false where player.id = ?1", playerId);
+        update("set selected = false where playerId = ?1", playerId);
         playerRepository.removePlayerAvatar(playerId);
     }
 
