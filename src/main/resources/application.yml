@@ -58,7 +58,6 @@ mp:
         queue:
           name: player.message.social.${faf.instance-id}
           exclusive: true
-          durable: true
           auto-delete: true
         exchange:
           name: lobby-message-inbound
@@ -68,7 +67,6 @@ mp:
         queue:
           name: player.message.admin.${faf.instance-id}
           exclusive: true
-          durable: true
           auto-delete: true
         exchange:
           name: lobby-message-inbound
@@ -78,7 +76,6 @@ mp:
         queue:
           name: player.session.state.${faf.instance-id}
           exclusive: true
-          durable: true
           auto-delete: true
         exchange:
           name: lobby-session-state
@@ -90,7 +87,6 @@ mp:
         queue:
           name: player.schema.request.${faf.instance-id}
           exclusive: true
-          durable: true
           auto-delete: true
       avatar-updates:
         connector: smallrye-rabbitmq
@@ -99,7 +95,6 @@ mp:
         queue:
           name: player.avatar.updates.${faf.instance-id}
           exclusive: true
-          durable: true
           auto-delete: true
         routing-keys: success.player_avatar.update
 
