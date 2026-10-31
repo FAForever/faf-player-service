@@ -19,7 +19,6 @@ module com.faforever.server.player {
     requires org.hibernate.orm.core;
     requires org.jspecify;
     requires org.slf4j;
-    requires quarkus.hibernate.orm.panache;
     requires quarkus.scheduler.api;
     requires smallrye.reactive.messaging.api;
     requires smallrye.reactive.messaging.rabbitmq;
@@ -29,5 +28,6 @@ module com.faforever.server.player {
     requires io.smallrye.config;
     requires com.maxmind.geoip2;
     requires com.maxmind.db;
+    requires jakarta.data;
     requires static lombok;
 }

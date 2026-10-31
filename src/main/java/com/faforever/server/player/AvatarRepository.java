@@ -1,15 +1,17 @@
 package com.faforever.server.player;
 
 import com.faforever.server.domain.AvatarEntity;
-import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.data.repository.By;
+import jakarta.data.repository.Find;
+import jakarta.data.repository.Repository;
 import jakarta.transaction.Transactional;
 
-@ApplicationScoped
-class AvatarRepository implements PanacheRepositoryBase<AvatarEntity, Integer> {
+import java.util.Optional;
+
+@Repository
+interface AvatarRepository {
 
     @Transactional
-    Avatar findAvatar(int avatarId) {
-        return find("id", avatarId).singleResultOptional().map(Avatar::from).orElseThrow();
-    }
+    @Find
+    Optional<AvatarEntity> findAvatar(@By(By.ID) int avatarId);
 }

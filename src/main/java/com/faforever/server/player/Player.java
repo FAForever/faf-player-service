@@ -1,7 +1,6 @@
 package com.faforever.server.player;
 
 import com.faforever.server.domain.PlayerEntity;
-import com.faforever.server.rating.Leaderboard;
 import com.faforever.server.rating.LeaderboardRating;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -9,10 +8,9 @@ import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 public class Player {
 
@@ -28,12 +26,12 @@ public class Player {
     private @Nullable String clan;
     private @Nullable Avatar avatar;
 
-    private final Map<Leaderboard, LeaderboardRating> leaderboardRatings = new ConcurrentHashMap<>();
+    private final Set<LeaderboardRating> leaderboardRatings = ConcurrentHashMap.newKeySet();
 
     @Getter
     private State state = State.ONLINE;
 
-    public Player(int id, String username) {
+    private Player(int id, String username) {
         this.id = id;
         this.username = username;
     }
@@ -46,34 +44,20 @@ public class Player {
         if (playerEntity.getClan() != null) {
             player.setClan(playerEntity.getClan().getTag());
         }
-        Collection<LeaderboardRating> leaderboardRatings = playerEntity.getLeaderboardRatings()
-                                                                       .stream()
-                                                                       .map(leaderboardRatingEntity -> {
-                                                                           Leaderboard leaderboard = new Leaderboard(
-                                                                                   leaderboardRatingEntity.getLeaderboard()
-                                                                                                          .getTechnicalName());
-                                                                           return new LeaderboardRating(leaderboard,
-                                                                                   leaderboardRatingEntity.getTotalGames(),
-                                                                                   leaderboardRatingEntity.getMean(),
-                                                                                   leaderboardRatingEntity.getDeviation());
-                                                                       })
-                                                                       .collect(Collectors.toSet());
-        player.updateLeaderboardRatings(leaderboardRatings);
         return player;
     }
 
-    public void markOffline() {
+    void markOffline() {
         state = State.OFFLINE;
     }
 
-    public void updateLeaderboardRatings(Collection<LeaderboardRating> leaderboardRatings) {
-        for (LeaderboardRating leaderboardRating : leaderboardRatings) {
-            this.leaderboardRatings.put(leaderboardRating.leaderboard(), leaderboardRating);
-        }
+    void updateLeaderboardRatings(Collection<LeaderboardRating> leaderboardRatings) {
+        this.leaderboardRatings.clear();
+        this.leaderboardRatings.addAll(leaderboardRatings);
     }
 
-    public Map<Leaderboard, LeaderboardRating> getLeaderboardRatings() {
-        return Map.copyOf(leaderboardRatings);
+    public Set<LeaderboardRating> getLeaderboardRatings() {
+        return Set.copyOf(leaderboardRatings);
     }
 
     void setClan(String clan) {

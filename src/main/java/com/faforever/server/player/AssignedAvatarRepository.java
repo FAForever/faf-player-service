@@ -1,43 +1,51 @@
 package com.faforever.server.player;
 
-import com.faforever.server.domain.AssignedAvatarEntity;
 import com.faforever.server.domain.AvatarEntity;
-import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import jakarta.enterprise.context.ApplicationScoped;
+import com.faforever.server.domain._AvatarEntity;
+import jakarta.data.repository.By;
+import jakarta.data.repository.Find;
+import jakarta.data.repository.Param;
+import jakarta.data.repository.Query;
+import jakarta.data.repository.Repository;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Optional;
 
-@RequiredArgsConstructor
-@ApplicationScoped
-class AssignedAvatarRepository implements PanacheRepositoryBase<AssignedAvatarEntity, Integer> {
-
-    private final PlayerRepository playerRepository;
+@Repository
+interface AssignedAvatarRepository {
 
     @Transactional
-    Set<Avatar> findAssignedAvatarsByPlayer(int playerId) {
-        return stream("where playerId = ?1 and (expirationDate is null or expirationDate < current_timestamp)", playerId)
-                .map(AssignedAvatarEntity::getAvatar)
-                .map(Avatar::from)
-                .collect(Collectors.toSet());
+    @Query("select a.avatar from AssignedAvatarEntity a where a.playerId = :playerId and (a.expirationDate is null or a.expirationDate < current_timestamp)")
+    List<AvatarEntity> findAssignedAvatarsByPlayer(@Param("playerId") int playerId);
+
+    @Query("update AssignedAvatarEntity a set a.selected = (a.avatar.url = :avatarUrl) where a.playerId = :playerId")
+    void updateSelectedAvatarAssignment(@Param("playerId") int playerId, @Param("avatarUrl") String avatarUrl);
+
+    @Query("update AssignedAvatarEntity a set a.selected = false where a.playerId = :playerId")
+    void removeSelectedAvatarAssignment(@Param("playerId") int playerId);
+
+    @Find
+    Optional<AvatarEntity> findAvatar(@By(_AvatarEntity.URL) String avatarUrl);
+
+    @Query("update PlayerEntity p set p.selectedAvatar = null where p.id = :playerId")
+    void removePlayerAvatar(@Param("playerId") int playerId);
+
+    @Query("update PlayerEntity p set p.selectedAvatar = :avatar where p.id = :playerId")
+    void updatePlayerAvatar(@Param("playerId") int playerId, @Param("avatar") AvatarEntity avatar);
+
+    @Transactional
+    default AvatarEntity updateSelectedAvatar(int playerId, String avatarUrl) {
+        updateSelectedAvatarAssignment(playerId, avatarUrl);
+        AvatarEntity avatarEntity = findAvatar(avatarUrl).orElseThrow();
+        updatePlayerAvatar(playerId, avatarEntity);
+        return avatarEntity;
     }
 
     @Transactional
-    Avatar updateSelectedAvatar(int playerId, String avatarUrl) {
-        update("set selected = (avatar.url = ?1) where playerId = ?2", avatarUrl, playerId);
-        AvatarEntity avatar = find(
-                "where playerId = ?1 and avatar.url = ?2 and (expirationDate is null or expirationDate < current_timestamp)",
-                playerId, avatarUrl).singleResult().getAvatar();
-        playerRepository.updatePlayerAvatar(playerId, avatar);
-        return Avatar.from(avatar);
-    }
-
-    @Transactional
-    void removeSelectedAvatar(int playerId) {
-        update("set selected = false where playerId = ?1", playerId);
-        playerRepository.removePlayerAvatar(playerId);
+    default void removeSelectedAvatar(int playerId) {
+        removeSelectedAvatarAssignment(playerId);
+        removePlayerAvatar(playerId);
     }
 
 }

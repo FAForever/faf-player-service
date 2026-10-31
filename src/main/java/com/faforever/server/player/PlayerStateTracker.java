@@ -1,6 +1,8 @@
 package com.faforever.server.player;
 
 import com.faforever.server.domain.FriendOrFoeEntity;
+import com.faforever.server.domain.LeaderboardRatingEntity;
+import com.faforever.server.domain.PlayerEntity;
 import com.faforever.server.geoip.GeoIpService;
 import com.faforever.server.interceptor.cdi.MDCInterceptor;
 import com.faforever.server.interceptor.cdi.MDCPopulated;
@@ -34,6 +36,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -55,12 +58,16 @@ class PlayerStateTracker {
     private final UserGroupAssignmentRepository userGroupAssignmentRepository;
     private final LeaderboardRatingRepository leaderboardRatingRepository;
 
+    @Getter(AccessLevel.PACKAGE)
     private final Map<Integer, Player> playerIdMap;
     @Getter(AccessLevel.PACKAGE)
-    private final Set<Player> dirtyPlayers;
+    private final Map<Integer, Player> dirtyPlayersIdMap;
 
-    private final Map<Long, Player> sessionPlayerMap = new ConcurrentHashMap<>();
-    private final Map<Long, Instant> sessionExpirationMap = new ConcurrentHashMap<>();
+    @Getter(AccessLevel.PACKAGE)
+    private final Map<Long, Player> sessionPlayerMap;
+    @Getter(AccessLevel.PACKAGE)
+    private final Map<Long, Instant> sessionExpirationMap;
+    @Getter(AccessLevel.PACKAGE)
     private final Map<Player, Set<Long>> playerSessionMap = new ConcurrentHashMap<>();
 
     private Instant lastRatingUpdateTime = Instant.now();
@@ -83,8 +90,17 @@ class PlayerStateTracker {
         this.leaderboardRatingRepository = leaderboardRatingRepository;
         this.playerIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "online"),
                                                       new ConcurrentHashMap<>());
-        this.dirtyPlayers = meterRegistry.gaugeCollectionSize("faf.players", Tags.of("state", "dirty"),
-                                                              ConcurrentHashMap.newKeySet());
+        this.dirtyPlayersIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "dirty"),
+                                                            new ConcurrentHashMap<>());
+        this.sessionPlayerMap = meterRegistry.gaugeMapSize("faf.sessions", Tags.of("state", "online"),
+                                                           new ConcurrentHashMap<>());
+        this.sessionExpirationMap = Objects.requireNonNull(
+                meterRegistry.gauge("faf.sessions", Tags.of("state", "expired"), new ConcurrentHashMap<>(),
+                                    sessionsExpiredMap -> sessionsExpiredMap.values()
+                                                                            .stream()
+                                                                            .filter(instant -> instant.isAfter(
+                                                                                    Instant.now()))
+                                                                            .count()));
     }
 
     @PostConstruct
@@ -117,7 +133,15 @@ class PlayerStateTracker {
            .addKeyValue(MDCInterceptor.PLAYER_ID, playerId)
            .log("Registering session");
         Player player = playerIdMap.computeIfAbsent(playerId, key -> {
-            Player loadedPlayer = playerRepository.loadPlayer(key);
+            PlayerEntity playerEntity = playerRepository.loadPlayer(key)
+                                                        .orElseThrow(() -> new IllegalStateException(
+                                                                "No user with id %d".formatted(playerId)));
+
+            Set<LeaderboardRating> leaderboardRatings = leaderboardRatingRepository.loadPlayerRatings(
+                    playerEntity.getId()).stream().map(LeaderboardRating::from).collect(Collectors.toSet());
+
+            Player loadedPlayer = Player.from(playerEntity);
+            loadedPlayer.updateLeaderboardRatings(leaderboardRatings);
             loadedPlayer.setCountry(geoIpService.findCountry(ipAddress));
             return loadedPlayer;
         });
@@ -146,7 +170,7 @@ class PlayerStateTracker {
            .log("Registered new session");
         playerRepository.updatePlayerIpAddress(playerId, ipAddress);
         sendWelcomeMessages(sessionId, player);
-        dirtyPlayers.add(player);
+        dirtyPlayersIdMap.put(player.getId(), player);
     }
 
     private void sendWelcomeMessages(long sessionId, Player player) {
@@ -159,7 +183,15 @@ class PlayerStateTracker {
         }
 
         Map<FriendOrFoeEntity.Status, Set<Integer>> friendsAndFoes = friendOrFoeRepository.loadFriendsAndFoes(
-                player.getId());
+                                                                                                  player.getId())
+                                                                                          .stream()
+                                                                                          .collect(
+                                                                                                  Collectors.groupingBy(
+                                                                                                          FriendOrFoeEntity::getStatus,
+                                                                                                          Collectors.mapping(
+                                                                                                                  friendOrFoeEntity -> friendOrFoeEntity.getId()
+                                                                                                                                                        .subjectId(),
+                                                                                                                  Collectors.toSet())));
 
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new ConnectionMessage.LoginSuccessResponse(
@@ -183,6 +215,8 @@ class PlayerStateTracker {
            .addKeyValue(MDCInterceptor.PLAYER_ID, playerId)
            .log("Removing session");
         playerIdMap.computeIfPresent(playerId, (_, player) -> {
+            sessionExpirationMap.remove(sessionId);
+
             if (!sessionPlayerMap.remove(sessionId, player)) {
                 return player;
             }
@@ -197,7 +231,7 @@ class PlayerStateTracker {
 
             if (remainingSessions == null) {
                 player.markOffline();
-                dirtyPlayers.add(player);
+                dirtyPlayersIdMap.put(player.getId(), player);
                 return null;
             } else {
                 return player;
@@ -214,7 +248,8 @@ class PlayerStateTracker {
             if (playerAvatarUpdate.avatarId() == null) {
                 player.clearAvatar();
             } else {
-                player.setAvatar(avatarRepository.findAvatar(playerAvatarUpdate.avatarId()));
+                player.setAvatar(
+                        avatarRepository.findAvatar(playerAvatarUpdate.avatarId()).map(Avatar::from).orElseThrow());
             }
         });
     }
@@ -241,6 +276,7 @@ class PlayerStateTracker {
             if (player != null) {
                 unregisterPlayerSession(expiredSessionId, player.getId());
             }
+            sessionExpirationMap.remove(expiredSessionId);
         });
     }
 
@@ -257,7 +293,15 @@ class PlayerStateTracker {
         }
 
         Map<Integer, Set<LeaderboardRating>> playerIdRatingMap = leaderboardRatingRepository.loadUpdatedLeaderboardRatings(
-                playerIds, currentRatingUpdateTime);
+                                                                                                    playerIds, currentRatingUpdateTime)
+                                                                                            .stream()
+                                                                                            .collect(
+                                                                                                    Collectors.groupingBy(
+                                                                                                            LeaderboardRatingEntity::getPlayerId,
+                                                                                                            Collectors.mapping(
+                                                                                                                    LeaderboardRating::from,
+                                                                                                                    Collectors.toSet())));
+
         if (playerIdRatingMap.isEmpty()) {
             LOG.debug("No updated ratings found");
             return;
@@ -274,16 +318,19 @@ class PlayerStateTracker {
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Timed(value = "faf.player.dirty.update", histogram = true)
     void sendUpdateForDirtyPlayers() {
-        Set<Player> frozenDirtyPlayers = Set.copyOf(dirtyPlayers);
+        Map<Integer, Player> frozenDirtyPlayers = Map.copyOf(dirtyPlayersIdMap);
         if (frozenDirtyPlayers.isEmpty()) {
             return;
         }
         LOG.debug("Sending player info for {} players", frozenDirtyPlayers.size());
 
-        Set<PlayerInfo> playerInfos = frozenDirtyPlayers.stream().map(PlayerInfo::from).collect(Collectors.toSet());
+        Set<PlayerInfo> playerInfos = frozenDirtyPlayers.values()
+                                                        .stream()
+                                                        .map(PlayerInfo::from)
+                                                        .collect(Collectors.toSet());
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(playerInfos)));
 
-        dirtyPlayers.removeAll(frozenDirtyPlayers);
+        frozenDirtyPlayers.forEach(dirtyPlayersIdMap::remove);
     }
 
     void updatePlayer(int playerId, Consumer<Player> updater) {
@@ -292,6 +339,6 @@ class PlayerStateTracker {
             return;
         }
         updater.accept(player);
-        dirtyPlayers.add(player);
+        dirtyPlayersIdMap.put(playerId, player);
     }
 }

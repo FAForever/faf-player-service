@@ -14,9 +14,8 @@ import lombok.Setter;
 @Table(name = "leaderboard_rating")
 public class LeaderboardRatingEntity extends TimeTrackedEntity {
 
-    @ManyToOne
-    @JoinColumn(name = "login_id")
-    private PlayerEntity player;
+    @Column(name = "login_id")
+    private int playerId;
 
     @ManyToOne
     @JoinColumn(name = "leaderboard_id")

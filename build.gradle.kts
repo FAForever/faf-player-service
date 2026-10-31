@@ -5,9 +5,9 @@ import net.ltgt.gradle.nullaway.nullaway
 plugins {
     java
     id("io.quarkus")
-    id("org.gradlex.extra-java-module-info") version("1.14.2")
-    id("net.ltgt.errorprone") version("5.1.0")
-    id("net.ltgt.nullaway") version("3.0.0")
+    id("org.gradlex.extra-java-module-info") version ("1.14.2")
+    id("net.ltgt.errorprone") version ("5.1.0")
+    id("net.ltgt.nullaway") version ("3.0.0")
     id("com.adarshr.test-logger") version "4.0.0"
 }
 
@@ -30,11 +30,15 @@ dependencies {
     implementation("io.quarkus:quarkus-jdbc-mariadb")
     implementation("io.quarkus:quarkus-jackson")
     implementation("io.quarkus:quarkus-scheduler")
-    implementation("io.quarkus:quarkus-hibernate-orm-panache")
+    implementation("io.quarkus:quarkus-hibernate-orm")
+    implementation("io.quarkus:quarkus-data-processor")
     implementation("io.quarkus:quarkus-arc")
     implementation("io.quarkus:quarkus-logging-json")
     implementation("io.quarkus:quarkus-micrometer-registry-prometheus")
     implementation("io.quarkus:quarkus-smallrye-health")
+
+    implementation("jakarta.data:jakarta.data-api")
+    annotationProcessor("io.quarkus:quarkus-data-processor:${property("quarkusPlatformVersion")}")
 
     implementation("com.maxmind.geoip2:geoip2:4.4.0")
 

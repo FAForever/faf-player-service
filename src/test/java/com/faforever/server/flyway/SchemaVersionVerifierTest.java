@@ -37,4 +37,12 @@ class SchemaVersionVerifierTest {
         assertThrows(IllegalStateException.class, () -> schemaVersionVerifier.checkMinimumVersion());
     }
 
+    @Test
+    @TestConfigProperty(key = "faf.minimum-database-version", value = "10")
+    void testNoVersion() {
+        when(schemaVersionRepository.findMaxVersion()).thenReturn(Optional.empty());
+
+        assertThrows(IllegalStateException.class, () -> schemaVersionVerifier.checkMinimumVersion());
+    }
+
 }

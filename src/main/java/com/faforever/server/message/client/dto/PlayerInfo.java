@@ -23,12 +23,16 @@ public record PlayerInfo(
     }
 
     public static PlayerInfo from(Player player) {
-        Map<String, LeaderboardStats> leaderboardStatsMap = player.getLeaderboardRatings().entrySet().stream().map(
-                entry -> {
-                    String technicalName = entry.getKey().technicalName();
-                    LeaderboardStats leaderboardStats = LeaderboardStats.from(entry.getValue());
-                    return Map.entry(technicalName, leaderboardStats);
-                }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, LeaderboardStats> leaderboardStatsMap = player.getLeaderboardRatings()
+                                                                  .stream()
+                                                                  .map(leaderboardRating -> {
+                                                                      LeaderboardStats leaderboardStats = LeaderboardStats.from(
+                                                                              leaderboardRating);
+                                                                      return Map.entry(leaderboardRating.leaderboard(),
+                                                                                       leaderboardStats);
+                                                                  })
+                                                                  .collect(Collectors.toMap(Map.Entry::getKey,
+                                                                                            Map.Entry::getValue));
         State state = switch (player.getState()) {
             case ONLINE -> null;
             case OFFLINE -> State.OFFLINE;

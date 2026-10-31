@@ -5,13 +5,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.util.HashSet;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -36,7 +32,4 @@ public class PlayerEntity extends AbstractEntity {
     @ManyToOne
     @JoinColumn(name = "avatar_id")
     private AvatarEntity selectedAvatar;
-
-    @OneToMany(mappedBy = "player")
-    private Set<LeaderboardRatingEntity> leaderboardRatings = new HashSet<>();
 }
