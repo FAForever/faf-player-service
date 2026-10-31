@@ -71,7 +71,7 @@ public sealed interface AdminMessage {
     ) implements Client {}
 
     record NoticeInfo(
-            @Nullable String message,
+            @Nullable String text,
             Style style
     ) implements Server, LobbyMessage.Broadcast {
 

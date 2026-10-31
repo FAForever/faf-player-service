@@ -42,7 +42,7 @@ public class MessageSerializationTest {
         JSONAssert.assertEquals("""
                 {
                     "command": "notice",
-                    "message": "test",
+                                    "text": "test",
                     "style": "info"
                 }
                 """, jsonMapper.writeValueAsString((AdminMessage.Server) message), JSONCompareMode.NON_EXTENSIBLE);
