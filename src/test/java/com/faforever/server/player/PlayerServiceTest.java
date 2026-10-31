@@ -1,5 +1,6 @@
 package com.faforever.server.player;
 
+import com.faforever.server.domain.AvatarEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
 import com.faforever.server.message.client.AdminMessage;
 import com.faforever.server.message.client.LobbyMessage;
@@ -8,18 +9,19 @@ import com.faforever.server.message.client.dto.AvatarInfo;
 import com.faforever.server.message.service.InboundLobbyMessage;
 import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
-import com.faforever.server.rating.Leaderboard;
-import com.faforever.server.rating.LeaderboardRating;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentCaptor.captor;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -29,7 +31,6 @@ class PlayerServiceTest {
 
     private static final int PLAYER_ID = 1;
     private static final long SESSION_ID = 0;
-    private static final Avatar AVATAR = new Avatar(5, "temp", "temporary");
 
     @Inject
     PlayerService playerService;
@@ -46,27 +47,31 @@ class PlayerServiceTest {
     @InjectMock
     private UserGroupAssignmentRepository userGroupAssignmentRepository;
 
-    private final Player player = new Player(PLAYER_ID, "test");
+    private final AvatarEntity avatarEntity = new AvatarEntity();
 
     @BeforeEach
     void setup() {
-        player.setClan("TEST");
-        player.setAvatar(AVATAR);
-        player.updateLeaderboardRatings(List.of(new LeaderboardRating(new Leaderboard("leaderboard"), 1, 1000, 100)));
+        avatarEntity.setId(5);
+        avatarEntity.setUrl("temp");
+        avatarEntity.setDescription("temporary");
     }
-
 
     @Test
     void testAddRemoveFriend() {
         int otherId = 2;
         playerService.handleSocialRequest(createInboundMessage(new SocialMessage.SocialAddRequest("", otherId, null)));
 
-        verify(friendOrFoeRepository).upsertPlayerRelationship(PLAYER_ID, otherId, FriendOrFoeEntity.Status.FRIEND);
+        ArgumentCaptor<FriendOrFoeEntity> captor = captor();
+        verify(friendOrFoeRepository).upsertPlayerRelationship(captor.capture());
+
+        FriendOrFoeEntity upserted = captor.getValue();
+        assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), upserted.getId());
+        assertEquals(FriendOrFoeEntity.Status.FRIEND, upserted.getStatus());
 
         playerService.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", otherId, null)));
 
-        verify(friendOrFoeRepository).deletePlayerRelationship(PLAYER_ID, otherId);
+        verify(friendOrFoeRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
     }
 
     @Test
@@ -74,17 +79,22 @@ class PlayerServiceTest {
         int otherId = 2;
         playerService.handleSocialRequest(createInboundMessage(new SocialMessage.SocialAddRequest("", null, otherId)));
 
-        verify(friendOrFoeRepository).upsertPlayerRelationship(PLAYER_ID, otherId, FriendOrFoeEntity.Status.FOE);
+        ArgumentCaptor<FriendOrFoeEntity> captor = captor();
+        verify(friendOrFoeRepository).upsertPlayerRelationship(captor.capture());
+
+        FriendOrFoeEntity upserted = captor.getValue();
+        assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), upserted.getId());
+        assertEquals(FriendOrFoeEntity.Status.FOE, upserted.getStatus());
 
         playerService.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", null, otherId)));
 
-        verify(friendOrFoeRepository).deletePlayerRelationship(PLAYER_ID, otherId);
+        verify(friendOrFoeRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
     }
 
     @Test
     void testSendAvatars() {
-        when(assignedAvatarRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(Set.of(AVATAR));
+        when(assignedAvatarRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(List.of(avatarEntity));
 
         String requestId = "12345";
         playerService.handleSocialRequest(createInboundMessage(new SocialMessage.ListAvatarsRequest(requestId)));
@@ -92,19 +102,21 @@ class PlayerServiceTest {
         verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
                                                                                  new SocialMessage.AvatarInfoList(
                                                                                          requestId,
-                                                                                         Set.of(new AvatarInfo(
-                                                                                                 AVATAR.url(),
-                                                                                                 AVATAR.description())))));
+                                                                                         Set.of(AvatarInfo.from(
+                                                                                                 avatarEntity)))));
     }
 
     @Test
     void testSelectAvatar() {
-        Avatar avatar = new Avatar(4, "new", "newone");
+        AvatarEntity avatarEntity = new AvatarEntity();
+        avatarEntity.setId(4);
+        avatarEntity.setUrl("new");
+        avatarEntity.setDescription("newone");
 
-        when(assignedAvatarRepository.updateSelectedAvatar(PLAYER_ID, "new")).thenReturn(avatar);
+        when(assignedAvatarRepository.updateSelectedAvatar(PLAYER_ID, "new")).thenReturn(avatarEntity);
 
         playerService.handleSocialRequest(
-                createInboundMessage(new SocialMessage.SelectAvatarRequest("", avatar.url())));
+                createInboundMessage(new SocialMessage.SelectAvatarRequest("", avatarEntity.getUrl())));
 
         verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, 4));
     }

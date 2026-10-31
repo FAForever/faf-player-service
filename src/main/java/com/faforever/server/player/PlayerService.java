@@ -54,8 +54,8 @@ public class PlayerService {
         switch (request.message()) {
             case AdminMessage.BroadcastRequest broadcastRequest -> broadcast(request.playerId(), broadcastRequest);
             case AdminMessage.KickPlayerRequest kickPlayerRequest -> kickPlayer(request.playerId(), kickPlayerRequest);
-            case AdminMessage.ClosePlayerGameRequest closePlayerGameRequest -> closePlayerGame(request.playerId(),
-                                                                                               closePlayerGameRequest);
+            case AdminMessage.ClosePlayerGameRequest closePlayerGameRequest ->
+                    closePlayerGame(request.playerId(), closePlayerGameRequest);
         }
     }
 
@@ -109,14 +109,16 @@ public class PlayerService {
         switch (request.message()) {
             case SocialMessage.ListAvatarsRequest(String requestId) -> {
                 LOG.info("Listing avatars");
-                Set<AvatarInfo> avatars = assignedAvatarRepository.findAssignedAvatarsByPlayer(playerId).stream().map(
-                        AvatarInfo::from).collect(Collectors.toSet());
+                Set<AvatarInfo> avatars = assignedAvatarRepository.findAssignedAvatarsByPlayer(playerId)
+                                                                  .stream()
+                                                                  .map(AvatarInfo::from)
+                                                                  .collect(Collectors.toSet());
                 SocialMessage.AvatarInfoList avatarInfoList = new SocialMessage.AvatarInfoList(requestId, avatars);
                 outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(request.sessionId(), avatarInfoList));
             }
             case SocialMessage.SelectAvatarRequest(_, String avatarUrl) -> {
                 LOG.info("Selecting avatar {}", avatarUrl);
-                Avatar avatar = assignedAvatarRepository.updateSelectedAvatar(playerId, avatarUrl);
+                Avatar avatar = Avatar.from(assignedAvatarRepository.updateSelectedAvatar(playerId, avatarUrl));
                 outboundAvatarUpdateEmitter.send(new PlayerAvatarUpdate(playerId, avatar.id()));
             }
             case SocialMessage.RemoveAvatarRequest _ -> {
@@ -148,11 +150,12 @@ public class PlayerService {
     }
 
     private void addSocialRelationship(int playerId, int targetId, FriendOrFoeEntity.Status status) {
-        friendOrFoeRepository.upsertPlayerRelationship(playerId, targetId, status);
+        friendOrFoeRepository.upsertPlayerRelationship(
+                new FriendOrFoeEntity(new FriendOrFoeEntity.Id(playerId, targetId), status));
     }
 
     private void removeSocialRelationship(int playerId, int targetId) {
-        friendOrFoeRepository.deletePlayerRelationship(playerId, targetId);
+        friendOrFoeRepository.deletePlayerRelationship(new FriendOrFoeEntity.Id(playerId, targetId));
     }
 
 }

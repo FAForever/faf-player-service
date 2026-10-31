@@ -5,23 +5,24 @@ import jakarta.inject.Singleton;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @Singleton
-public class SchemaVersionVerifier {
+class SchemaVersionVerifier {
 
     private final SchemaVersionRepository schemaVersionRepository;
     private final int minimumVersion;
 
-    public SchemaVersionVerifier(SchemaVersionRepository schemaVersionRepository,
-                                 @ConfigProperty(name = "faf.minimum-database-version") int minimumVersion) {
+    SchemaVersionVerifier(SchemaVersionRepository schemaVersionRepository,
+                          @ConfigProperty(name = "faf.minimum-database-version") int minimumVersion) {
         this.schemaVersionRepository = schemaVersionRepository;
         this.minimumVersion = minimumVersion;
     }
 
     @Startup
     void checkMinimumVersion() {
-        int actualVersion = schemaVersionRepository.findMaxVersion()
-                                                   .map(Integer::parseInt)
+        String maxVersion = schemaVersionRepository.findMaxVersion()
                                                    .orElseThrow(() -> new IllegalStateException(
                                                            "No database version is available"));
+
+        int actualVersion = Integer.parseInt(maxVersion);
 
         if (actualVersion < minimumVersion) {
             throw new IllegalStateException(

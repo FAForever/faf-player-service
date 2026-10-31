@@ -1,21 +1,19 @@
 package com.faforever.server.player;
 
-import com.faforever.server.domain.UserGroupAssignment;
-import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.data.repository.Param;
+import jakarta.data.repository.Query;
+import jakarta.data.repository.Repository;
 import jakarta.transaction.Transactional;
 
-@ApplicationScoped
-class UserGroupAssignmentRepository implements PanacheRepositoryBase<UserGroupAssignment, Integer> {
+@Repository
+interface UserGroupAssignmentRepository {
 
     @Transactional
-    boolean playerLacksPermission(int playerId, String permission) {
-        return count("userId = ?1 and userGroup.groupPermissions.technicalName = ?1", playerId, permission) == 0;
-    }
+    @Query("select case when count(u) > 0 then false else true end from UserGroupAssignment u join u.userGroup.groupPermissions p where u.userId = :playerId and p.technicalName = :permission")
+    boolean playerLacksPermission(@Param("playerId") int playerId, @Param("permission") String permission);
 
     @Transactional
-    boolean isPlayerModerator(int playerId) {
-        return count("userId = ?1 and userGroup.technicalName = 'faf_moderators_global'", playerId) > 0;
-    }
+    @Query("select case when count(u) > 0 then true else false end from UserGroupAssignment u where u.userId = :playerId and u.userGroup.technicalName = 'faf_moderators_global'")
+    boolean isPlayerModerator(int playerId);
 
 }

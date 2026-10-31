@@ -1,32 +1,23 @@
 package com.faforever.server.player;
 
-import com.faforever.server.domain.AvatarEntity;
 import com.faforever.server.domain.PlayerEntity;
-import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.data.repository.By;
+import jakarta.data.repository.Find;
+import jakarta.data.repository.Param;
+import jakarta.data.repository.Query;
+import jakarta.data.repository.Repository;
 import jakarta.transaction.Transactional;
 
-@ApplicationScoped
-class PlayerRepository implements PanacheRepositoryBase<PlayerEntity, Integer> {
+import java.util.Optional;
+
+@Repository
+interface PlayerRepository {
+
+    @Find
+    @Transactional
+    Optional<PlayerEntity> loadPlayer(@By(By.ID) int id);
 
     @Transactional
-    Player loadPlayer(int playerId) {
-        return findByIdOptional(playerId).map(Player::from).orElseThrow(() -> new IllegalStateException("No user with id %d".formatted(playerId)));
-    }
-
-    @Transactional
-    void updatePlayerIpAddress(int playerId, String ipAddress) {
-        update("set ip = ?1 where id = ?2", ipAddress, playerId);
-    }
-
-    @Transactional
-    void removePlayerAvatar(int playerId) {
-        update("set selectedAvatar = null where id = ?1", playerId);
-    }
-
-    @Transactional
-    void updatePlayerAvatar(int playerId, AvatarEntity avatar) {
-        update("set selectedAvatar = ?1 where id = ?2", avatar, playerId);
-    }
-
+    @Query("update PlayerEntity p set p.ip = :ipAddress where p.id = :playerId")
+    void updatePlayerIpAddress(@Param("playerId") int playerId, @Param("ipAddress") String ipAddress);
 }
