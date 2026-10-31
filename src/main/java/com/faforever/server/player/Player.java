@@ -8,6 +8,7 @@ import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,7 +27,7 @@ public class Player {
     private @Nullable String clan;
     private @Nullable Avatar avatar;
 
-    private final Set<LeaderboardRating> leaderboardRatings = ConcurrentHashMap.newKeySet();
+    private final Map<String, LeaderboardRating> leaderboardRatings = new ConcurrentHashMap<>();
 
     @Getter
     private State state = State.ONLINE;
@@ -52,12 +53,13 @@ public class Player {
     }
 
     void updateLeaderboardRatings(Collection<LeaderboardRating> leaderboardRatings) {
-        this.leaderboardRatings.clear();
-        this.leaderboardRatings.addAll(leaderboardRatings);
+        for (LeaderboardRating leaderboardRating : leaderboardRatings) {
+            this.leaderboardRatings.put(leaderboardRating.leaderboard(), leaderboardRating);
+        }
     }
 
     public Set<LeaderboardRating> getLeaderboardRatings() {
-        return Set.copyOf(leaderboardRatings);
+        return Set.copyOf(leaderboardRatings.values());
     }
 
     void setClan(String clan) {
