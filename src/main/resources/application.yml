@@ -32,7 +32,7 @@ geo-ip:
 faf:
   instance-id: ${HOSTNAME:local}
   minimum-database-version: 143
-  default-channel-name: ${DEFAULT_CHANNEL_NAME:#aeolus]
+  default-channel-name: ${DEFAULT_CHANNEL_NAME:#aeolus}
 
 mp:
   messaging:
