@@ -149,20 +149,41 @@ public class MessageSerializationTest {
 
     @Test
     void testSocialInfo() throws Exception {
-        SocialMessage.SocialInfo message = new SocialMessage.SocialInfo(
+        SocialMessage.SocialInfo nonEmptyMessage = new SocialMessage.SocialInfo(
                 List.of("#aeolus", "#clan"),
                 List.of(2, 3),
                 List.of(4, 5)
         );
 
         JSONAssert.assertEquals("""
+                                {
+                                    "command": "social",
+                                    "autojoin": ["#aeolus", "#clan"],
+                                    "channels": ["#aeolus", "#clan"],
+                                    "friends": [2, 3],
+                                    "foes": [4, 5],
+                                    "power": 0
+                                }
+                                """, jsonMapper.writeValueAsString((SocialMessage.Server) nonEmptyMessage),
+                                JSONCompareMode.NON_EXTENSIBLE);
+
+        SocialMessage.SocialInfo emptyMessage = new SocialMessage.SocialInfo(
+                List.of(),
+                List.of(),
+                List.of()
+        );
+
+        JSONAssert.assertEquals("""
                 {
                     "command": "social",
-                    "autojoin": ["#aeolus", "#clan"],
-                    "friends": [2, 3],
-                    "foes": [4, 5]
+                                                                    "autojoin": [],
+                                                                    "channels": [],
+                                                                    "friends": [],
+                                                                    "foes": [],
+                                                                    "power": 0
                 }
-                """, jsonMapper.writeValueAsString((SocialMessage.Server) message), JSONCompareMode.NON_EXTENSIBLE);
+                                """, jsonMapper.writeValueAsString((SocialMessage.Server) emptyMessage),
+                                JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @Test

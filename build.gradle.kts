@@ -8,7 +8,7 @@ plugins {
     id("org.gradlex.extra-java-module-info") version ("1.14.2")
     id("net.ltgt.errorprone") version ("5.1.0")
     id("net.ltgt.nullaway") version ("3.0.0")
-    id("com.adarshr.test-logger") version "4.0.0"
+    id("com.adarshr.test-logger") version ("4.0.0")
 }
 
 group = "com.faforever.server"
@@ -36,6 +36,7 @@ dependencies {
     implementation("io.quarkus:quarkus-logging-json")
     implementation("io.quarkus:quarkus-micrometer-registry-prometheus")
     implementation("io.quarkus:quarkus-smallrye-health")
+    implementation("io.micrometer:micrometer-java21")
 
     implementation("jakarta.data:jakarta.data-api")
     annotationProcessor("io.quarkus:quarkus-data-processor:${property("quarkusPlatformVersion")}")

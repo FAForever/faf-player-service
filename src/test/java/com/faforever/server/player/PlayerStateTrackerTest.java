@@ -175,7 +175,7 @@ class PlayerStateTrackerTest {
 
             assertThat(secondSessionTarget.sessionId(), equalTo(SESSION_ID));
             assertThat(secondMessage.message(),
-                       equalTo(new SocialMessage.SocialInfo(Set.of(), Set.of(3), Set.of(4))));
+                       equalTo(new SocialMessage.SocialInfo(Set.of("#aeolus"), Set.of(3), Set.of(4))));
 
             OutboundLobbyMessage<?> thirdMessage = sentMessages.getLast();
             OutboundTarget thirdTarget = thirdMessage.target();
@@ -216,7 +216,7 @@ class PlayerStateTrackerTest {
 
             assertThat(secondSessionTarget.sessionId(), equalTo(SESSION_ID));
             assertThat(secondMessage.message(),
-                       equalTo(new SocialMessage.SocialInfo(Set.of("#moderators"), Set.of(), Set.of())));
+                       equalTo(new SocialMessage.SocialInfo(Set.of("#aeolus", "#moderators"), Set.of(), Set.of())));
         }
 
         @Test
@@ -260,7 +260,7 @@ class PlayerStateTrackerTest {
 
             assertThat(secondSessionTarget.sessionId(), equalTo(SESSION_ID));
             assertThat(secondMessage.message(),
-                       equalTo(new SocialMessage.SocialInfo(Set.of("#TEST_clan"), Set.of(), Set.of())));
+                       equalTo(new SocialMessage.SocialInfo(Set.of("#aeolus", "#TEST_clan"), Set.of(), Set.of())));
         }
 
         @Test

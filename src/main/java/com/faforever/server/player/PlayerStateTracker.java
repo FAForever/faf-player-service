@@ -27,6 +27,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -58,6 +59,8 @@ class PlayerStateTracker {
     private final UserGroupAssignmentRepository userGroupAssignmentRepository;
     private final LeaderboardRatingRepository leaderboardRatingRepository;
 
+    private final String defaultChannelName;
+
     @Getter(AccessLevel.PACKAGE)
     private final Map<Integer, Player> playerIdMap;
     @Getter(AccessLevel.PACKAGE)
@@ -79,7 +82,10 @@ class PlayerStateTracker {
                        PlayerRepository playerRepository, AvatarRepository avatarRepository,
                        FriendOrFoeRepository friendOrFoeRepository,
                        UserGroupAssignmentRepository userGroupAssignmentRepository,
-                       LeaderboardRatingRepository leaderboardRatingRepository, MeterRegistry meterRegistry) {
+                       LeaderboardRatingRepository leaderboardRatingRepository,
+                       @ConfigProperty(name = "faf.default-channel-name",
+                                       defaultValue = "#aeolus") String defaultChannelName,
+                       MeterRegistry meterRegistry) {
         this.geoIpService = geoIpService;
         this.playerConnectionsRequestEmitter = playerConnectionsRequestEmitter;
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
@@ -88,6 +94,7 @@ class PlayerStateTracker {
         this.friendOrFoeRepository = friendOrFoeRepository;
         this.userGroupAssignmentRepository = userGroupAssignmentRepository;
         this.leaderboardRatingRepository = leaderboardRatingRepository;
+        this.defaultChannelName = defaultChannelName;
         this.playerIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "online"),
                                                       new ConcurrentHashMap<>());
         this.dirtyPlayersIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "dirty"),
@@ -175,6 +182,7 @@ class PlayerStateTracker {
 
     private void sendWelcomeMessages(long sessionId, Player player) {
         Set<String> channels = new HashSet<>();
+        channels.add(defaultChannelName);
         if (player.getClan() != null) {
             channels.add("#%s_clan".formatted(player.getClan()));
         }
