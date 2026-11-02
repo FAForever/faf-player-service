@@ -50,11 +50,24 @@ public sealed interface SocialMessage {
     }
 
     record SocialInfo(
-            @JsonProperty("autojoin")Collection<String> channels,
+            @JsonProperty("channels") Collection<String> channels,
             @JsonProperty("friends") Collection<Integer> friendIds,
             @JsonProperty("foes") Collection<Integer> foeIds
     ) implements Server {
         public static final String COMMAND = "social";
+
+        @JsonProperty("autojoin")
+        public Collection<String> autojoin() {
+            return channels();
+        }
+
+        /// @deprecated Only exists for message backwards compatibility
+        @Deprecated
+        @JsonProperty("power")
+        public int power() {
+            return 0;
+        }
+
 
         @Override
         public String command() {
