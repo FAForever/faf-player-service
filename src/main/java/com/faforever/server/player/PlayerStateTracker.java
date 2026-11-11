@@ -1,5 +1,6 @@
 package com.faforever.server.player;
 
+import com.faforever.server.domain.AvatarEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
 import com.faforever.server.domain.LeaderboardRatingEntity;
 import com.faforever.server.domain.PlayerEntity;
@@ -9,13 +10,14 @@ import com.faforever.server.interceptor.cdi.MDCPopulated;
 import com.faforever.server.message.client.ConnectionMessage;
 import com.faforever.server.message.client.LobbyMessage;
 import com.faforever.server.message.client.SocialMessage;
+import com.faforever.server.message.client.dto.AvatarInfo;
+import com.faforever.server.message.client.dto.LeaderboardStats;
 import com.faforever.server.message.client.dto.PlayerInfo;
 import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
 import com.faforever.server.micrometer.PlayerSessionStateResolver;
-import com.faforever.server.rating.LeaderboardRating;
-import com.faforever.server.rating.LeaderboardRatingRepository;
+import com.faforever.server.social.Avatar;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.aop.MeterTag;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -31,6 +33,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.slf4j.MDC;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -53,11 +56,7 @@ class PlayerStateTracker {
     private final Emitter<Map<String, String>> playerConnectionsRequestEmitter;
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
 
-    private final PlayerRepository playerRepository;
-    private final AvatarRepository avatarRepository;
-    private final FriendOrFoeRepository friendOrFoeRepository;
-    private final UserGroupAssignmentRepository userGroupAssignmentRepository;
-    private final LeaderboardRatingRepository leaderboardRatingRepository;
+    private final PlayerStateRepository playerStateRepository;
 
     private final String defaultChannelName;
 
@@ -79,21 +78,13 @@ class PlayerStateTracker {
                        @Channel("player-session-request") Emitter<Map<String, String>> playerConnectionsRequestEmitter,
                        @Channel(
                                "lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
-                       PlayerRepository playerRepository, AvatarRepository avatarRepository,
-                       FriendOrFoeRepository friendOrFoeRepository,
-                       UserGroupAssignmentRepository userGroupAssignmentRepository,
-                       LeaderboardRatingRepository leaderboardRatingRepository,
-                       @ConfigProperty(name = "faf.default-channel-name",
-                                       defaultValue = "#aeolus") String defaultChannelName,
+                       PlayerStateRepository playerStateRepository, @ConfigProperty(name = "faf.default-channel-name",
+                                                                                    defaultValue = "#aeolus") String defaultChannelName,
                        MeterRegistry meterRegistry) {
         this.geoIpService = geoIpService;
         this.playerConnectionsRequestEmitter = playerConnectionsRequestEmitter;
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
-        this.playerRepository = playerRepository;
-        this.avatarRepository = avatarRepository;
-        this.friendOrFoeRepository = friendOrFoeRepository;
-        this.userGroupAssignmentRepository = userGroupAssignmentRepository;
-        this.leaderboardRatingRepository = leaderboardRatingRepository;
+        this.playerStateRepository = playerStateRepository;
         this.defaultChannelName = defaultChannelName;
         this.playerIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "online"),
                                                       new ConcurrentHashMap<>());
@@ -135,19 +126,26 @@ class PlayerStateTracker {
 
     private void registerPlayerSession(long sessionId, int playerId, String ipAddress, boolean newConnection,
                                        Duration secondsToExpiry) {
-        LOG.atDebug()
-           .addKeyValue(MDCInterceptor.SESSION_ID, sessionId)
-           .addKeyValue(MDCInterceptor.PLAYER_ID, playerId)
-           .log("Registering session");
+        LOG.debug("Registering session");
         Player player = playerIdMap.computeIfAbsent(playerId, key -> {
-            PlayerEntity playerEntity = playerRepository.loadPlayer(key)
-                                                        .orElseThrow(() -> new IllegalStateException(
-                                                                "No user with id %d".formatted(playerId)));
+            PlayerEntity playerEntity = playerStateRepository.loadPlayer(key)
+                                                             .orElseThrow(() -> new IllegalStateException(
+                                                                     "No user with id %d".formatted(playerId)));
 
-            Set<LeaderboardRating> leaderboardRatings = leaderboardRatingRepository.loadPlayerRatings(
-                    playerEntity.getId()).stream().map(LeaderboardRating::from).collect(Collectors.toSet());
+            Set<LeaderboardRating> leaderboardRatings = playerStateRepository.loadPlayerRatings(playerEntity.getId())
+                                                                             .stream()
+                                                                             .map(PlayerStateTracker::convert)
+                                                                             .collect(Collectors.toSet());
 
-            Player loadedPlayer = Player.from(playerEntity);
+            Player loadedPlayer = new Player(playerEntity.getId(), playerEntity.getName());
+            AvatarEntity avatarEntity = playerEntity.getSelectedAvatar();
+            if (avatarEntity != null) {
+                loadedPlayer.setAvatar(
+                        new Avatar(avatarEntity.getId(), avatarEntity.getUrl(), avatarEntity.getDescription()));
+            }
+            if (playerEntity.getClan() != null) {
+                loadedPlayer.setClan(playerEntity.getClan().getTag());
+            }
             loadedPlayer.updateLeaderboardRatings(leaderboardRatings);
             loadedPlayer.setCountry(geoIpService.findCountry(ipAddress));
             return loadedPlayer;
@@ -171,11 +169,8 @@ class PlayerStateTracker {
             return;
         }
 
-        LOG.atInfo()
-           .addKeyValue(MDCInterceptor.SESSION_ID, sessionId)
-           .addKeyValue(MDCInterceptor.PLAYER_ID, playerId)
-           .log("Registered new session");
-        playerRepository.updatePlayerIpAddress(playerId, ipAddress);
+        LOG.info("Registered new session");
+        playerStateRepository.updatePlayerIpAddress(playerId, ipAddress);
         sendWelcomeMessages(sessionId, player);
         dirtyPlayersIdMap.put(player.getId(), player);
     }
@@ -186,11 +181,11 @@ class PlayerStateTracker {
         if (player.getClan() != null) {
             channels.add("#%s_clan".formatted(player.getClan()));
         }
-        if (userGroupAssignmentRepository.isPlayerModerator(player.getId())) {
+        if (playerStateRepository.isPlayerModerator(player.getId())) {
             channels.add("#moderators");
         }
 
-        Map<FriendOrFoeEntity.Status, Set<Integer>> friendsAndFoes = friendOrFoeRepository.loadFriendsAndFoes(
+        Map<FriendOrFoeEntity.Status, Set<Integer>> friendsAndFoes = playerStateRepository.loadFriendsAndFoes(
                                                                                                   player.getId())
                                                                                           .stream()
                                                                                           .collect(
@@ -203,7 +198,7 @@ class PlayerStateTracker {
 
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new ConnectionMessage.LoginSuccessResponse(
-                                                                                 PlayerInfo.from(player),
+                                                                                 convert(player),
                                                                                  OffsetDateTime.now())));
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new SocialMessage.SocialInfo(channels,
@@ -214,7 +209,7 @@ class PlayerStateTracker {
                                                                                                               FriendOrFoeEntity.Status.FOE,
                                                                                                               Set.of()))));
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId, new SocialMessage.PlayerInfoList(
-                playerIdMap.values().stream().map(PlayerInfo::from).collect(Collectors.toSet()))));
+                playerIdMap.values().stream().map(PlayerStateTracker::convert).collect(Collectors.toSet()))));
     }
 
     private void unregisterPlayerSession(long sessionId, int playerId) {
@@ -256,8 +251,10 @@ class PlayerStateTracker {
             if (playerAvatarUpdate.avatarId() == null) {
                 player.clearAvatar();
             } else {
-                player.setAvatar(
-                        avatarRepository.findAvatar(playerAvatarUpdate.avatarId()).map(Avatar::from).orElseThrow());
+                player.setAvatar(playerStateRepository.findAvatar(playerAvatarUpdate.avatarId())
+                                                      .map(entity -> new Avatar(entity.getId(), entity.getUrl(),
+                                                                                entity.getDescription()))
+                                                      .orElseThrow());
             }
         });
     }
@@ -282,6 +279,8 @@ class PlayerStateTracker {
         expiredSessionIds.forEach(expiredSessionId -> {
             Player player = sessionPlayerMap.get(expiredSessionId);
             if (player != null) {
+                MDC.put(MDCInterceptor.SESSION_ID, String.valueOf(expiredSessionId));
+                MDC.put(MDCInterceptor.PLAYER_ID, String.valueOf(player.getId()));
                 unregisterPlayerSession(expiredSessionId, player.getId());
             }
             sessionExpirationMap.remove(expiredSessionId);
@@ -300,15 +299,14 @@ class PlayerStateTracker {
             return;
         }
 
-        Map<Integer, Set<LeaderboardRating>> playerIdRatingMap = leaderboardRatingRepository.loadUpdatedLeaderboardRatings(
-                                                                                                    playerIds, currentRatingUpdateTime)
-                                                                                            .stream()
-                                                                                            .collect(
-                                                                                                    Collectors.groupingBy(
-                                                                                                            LeaderboardRatingEntity::getPlayerId,
-                                                                                                            Collectors.mapping(
-                                                                                                                    LeaderboardRating::from,
-                                                                                                                    Collectors.toSet())));
+        Map<Integer, Set<LeaderboardRating>> playerIdRatingMap = playerStateRepository.loadUpdatedLeaderboardRatings(
+                                                                                              playerIds, currentRatingUpdateTime)
+                                                                                      .stream()
+                                                                                      .collect(Collectors.groupingBy(
+                                                                                              LeaderboardRatingEntity::getPlayerId,
+                                                                                              Collectors.mapping(
+                                                                                                      PlayerStateTracker::convert,
+                                                                                                      Collectors.toSet())));
 
         if (playerIdRatingMap.isEmpty()) {
             LOG.debug("No updated ratings found");
@@ -334,7 +332,7 @@ class PlayerStateTracker {
 
         Set<PlayerInfo> playerInfos = frozenDirtyPlayers.values()
                                                         .stream()
-                                                        .map(PlayerInfo::from)
+                                                        .map(PlayerStateTracker::convert)
                                                         .collect(Collectors.toSet());
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(playerInfos)));
 
@@ -348,5 +346,36 @@ class PlayerStateTracker {
         }
         updater.accept(player);
         dirtyPlayersIdMap.put(playerId, player);
+    }
+
+    static LeaderboardRating convert(LeaderboardRatingEntity leaderboardRatingEntity) {
+        return new LeaderboardRating(leaderboardRatingEntity.getLeaderboard().getTechnicalName(),
+                                     leaderboardRatingEntity.getTotalGames(), leaderboardRatingEntity.getMean(),
+                                     leaderboardRatingEntity.getDeviation());
+    }
+
+    static PlayerInfo convert(Player player) {
+        Map<String, LeaderboardStats> leaderboardStatsMap = player.getLeaderboardRatings()
+                                                                  .stream()
+                                                                  .map(leaderboardRating -> {
+                                                                      LeaderboardStats.Rating rating = new LeaderboardStats.Rating(
+                                                                              leaderboardRating.mean(),
+                                                                              leaderboardRating.deviation());
+                                                                      LeaderboardStats leaderboardStats = new LeaderboardStats(
+                                                                              leaderboardRating.totalGames(), rating);
+                                                                      return Map.entry(leaderboardRating.leaderboard(),
+                                                                                       leaderboardStats);
+                                                                  })
+                                                                  .collect(Collectors.toMap(Map.Entry::getKey,
+                                                                                            Map.Entry::getValue));
+        PlayerInfo.State state = switch (player.getState()) {
+            case ONLINE -> null;
+            case OFFLINE -> PlayerInfo.State.OFFLINE;
+        };
+        String clan = player.getClan();
+        Avatar playerAvatar = player.getAvatar();
+        AvatarInfo avatar = playerAvatar == null ? null : AvatarInfo.from(playerAvatar);
+        return new PlayerInfo(player.getId(), player.getUsername(), clan, avatar, player.getCountry(),
+                              leaderboardStatsMap, state);
     }
 }

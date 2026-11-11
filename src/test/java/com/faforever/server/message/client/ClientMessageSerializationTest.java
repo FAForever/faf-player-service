@@ -1,8 +1,5 @@
-package com.faforever.server.message;
+package com.faforever.server.message.client;
 
-import com.faforever.server.message.client.AdminMessage;
-import com.faforever.server.message.client.ConnectionMessage;
-import com.faforever.server.message.client.SocialMessage;
 import com.faforever.server.message.client.dto.AvatarInfo;
 import com.faforever.server.message.client.dto.LeaderboardStats;
 import com.faforever.server.message.client.dto.PlayerInfo;
@@ -24,7 +21,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class MessageSerializationTest {
+public class ClientMessageSerializationTest {
 
     private JsonMapper jsonMapper;
 

@@ -1,7 +1,6 @@
 package com.faforever.server.message.client.dto;
 
-import com.faforever.server.domain.AvatarEntity;
-import com.faforever.server.player.Avatar;
+import com.faforever.server.social.Avatar;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record AvatarInfo(
@@ -11,10 +10,6 @@ public record AvatarInfo(
 
     public static AvatarInfo from(Avatar avatar) {
         return new AvatarInfo(avatar.url(), avatar.description());
-    }
-
-    public static AvatarInfo from(AvatarEntity avatar) {
-        return new AvatarInfo(avatar.getUrl(), avatar.getDescription());
     }
 
 }

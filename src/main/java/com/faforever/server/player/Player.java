@@ -1,7 +1,6 @@
 package com.faforever.server.player;
 
-import com.faforever.server.domain.PlayerEntity;
-import com.faforever.server.rating.LeaderboardRating;
+import com.faforever.server.social.Avatar;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,7 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Player {
+class Player {
 
     @Getter
     private final int id;
@@ -32,20 +31,9 @@ public class Player {
     @Getter
     private State state = State.ONLINE;
 
-    private Player(int id, String username) {
+    Player(int id, String username) {
         this.id = id;
         this.username = username;
-    }
-
-    static Player from(PlayerEntity playerEntity) {
-        Player player = new Player(playerEntity.getId(), playerEntity.getName());
-        if (playerEntity.getSelectedAvatar() != null) {
-            player.setAvatar(Avatar.from(playerEntity.getSelectedAvatar()));
-        }
-        if (playerEntity.getClan() != null) {
-            player.setClan(playerEntity.getClan().getTag());
-        }
-        return player;
     }
 
     void markOffline() {
@@ -58,7 +46,7 @@ public class Player {
         }
     }
 
-    public Set<LeaderboardRating> getLeaderboardRatings() {
+    Set<LeaderboardRating> getLeaderboardRatings() {
         return Set.copyOf(leaderboardRatings.values());
     }
 
@@ -70,7 +58,7 @@ public class Player {
         this.clan = clan;
     }
 
-    public @Nullable String getClan() {
+    @Nullable String getClan() {
         return clan;
     }
 
@@ -90,11 +78,11 @@ public class Player {
         this.avatar = null;
     }
 
-    public @Nullable Avatar getAvatar() {
+    @Nullable Avatar getAvatar() {
         return avatar;
     }
 
-    public enum State {
+    enum State {
         ONLINE, OFFLINE
     }
 }

@@ -1,6 +1,5 @@
 package com.faforever.server.message.client.dto;
 
-import com.faforever.server.rating.LeaderboardRating;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
@@ -24,10 +23,5 @@ public record LeaderboardStats(
         public List<Double> asList() {
             return List.of(mean(), deviation());
         }
-    }
-
-    static LeaderboardStats from(LeaderboardRating leaderboardRating) {
-        Rating rating = new Rating(leaderboardRating.mean(), leaderboardRating.deviation());
-        return new LeaderboardStats(leaderboardRating.totalGames(), rating);
     }
 }

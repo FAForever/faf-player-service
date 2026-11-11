@@ -1,16 +1,20 @@
-package com.faforever.server.player;
+package com.faforever.server.social;
 
 import com.faforever.server.domain.AvatarEntity;
+import com.faforever.server.domain.FriendOrFoeEntity;
+import jakarta.data.repository.By;
+import jakarta.data.repository.Delete;
 import jakarta.data.repository.Param;
 import jakarta.data.repository.Query;
 import jakarta.data.repository.Repository;
+import jakarta.data.repository.Save;
 import jakarta.transaction.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 
 @Repository
-interface AssignedAvatarRepository {
+interface SocialRepository {
 
     @Transactional
     @Query("select a.avatar from AssignedAvatarEntity a where a.playerId = :playerId and (a.expirationDate is null or a.expirationDate < current_timestamp)")
@@ -45,5 +49,13 @@ interface AssignedAvatarRepository {
         removeSelectedAvatarAssignment(playerId);
         removePlayerAvatar(playerId);
     }
+
+    @Save
+    @Transactional
+    void upsertPlayerRelationship(FriendOrFoeEntity entity);
+
+    @Delete
+    @Transactional
+    void deletePlayerRelationship(@By(By.ID) FriendOrFoeEntity.Id id);
 
 }
