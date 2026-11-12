@@ -5,6 +5,7 @@ import com.maxmind.geoip2.DatabaseReader;
 import com.maxmind.geoip2.exception.GeoIp2Exception;
 import com.maxmind.geoip2.model.CountryResponse;
 import io.micrometer.core.annotation.Timed;
+import io.quarkus.scheduler.Scheduled;
 import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -19,23 +20,27 @@ import java.nio.file.Path;
 @Singleton
 public class GeoIpService {
 
-    private final @Nullable DatabaseReader databaseReader;
+    private final Path geoIpDatabasePath;
+
+    private @Nullable DatabaseReader databaseReader;
 
     public GeoIpService(@ConfigProperty(name = "geo-ip.database-path") Path geoIpDatabasePath) {
-        DatabaseReader possibleDatabaseReader;
+        this.geoIpDatabasePath = geoIpDatabasePath;
+    }
+
+    @Scheduled(every = "10m", skipExecutionIf = Scheduled.ApplicationNotRunning.class,
+               concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    void refreshGeoIpDatabase() {
         try {
             if (Files.exists(geoIpDatabasePath)) {
-                possibleDatabaseReader = new DatabaseReader.Builder(geoIpDatabasePath.toFile()).withCache(
+                databaseReader = new DatabaseReader.Builder(geoIpDatabasePath.toFile()).withCache(
                         new CHMCache()).build();
             } else {
                 LOG.warn("No geoip database exists at {}", geoIpDatabasePath);
-                possibleDatabaseReader = null;
             }
         } catch (IOException exception) {
             LOG.warn("Unable to read geoip database", exception);
-            possibleDatabaseReader = null;
         }
-        databaseReader = possibleDatabaseReader;
     }
 
     @Timed("faf.country.lookup")

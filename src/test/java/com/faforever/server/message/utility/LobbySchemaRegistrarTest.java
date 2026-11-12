@@ -1,4 +1,4 @@
-package com.faforever.server.message.client;
+package com.faforever.server.message.utility;
 
 import com.faforever.server.message.service.LobbySchemaDetails;
 import com.faforever.server.message.service.LobbySchemaDetails.Direction;

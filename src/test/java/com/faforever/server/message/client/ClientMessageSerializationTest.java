@@ -1,8 +1,5 @@
-package com.faforever.server.message;
+package com.faforever.server.message.client;
 
-import com.faforever.server.message.client.AdminMessage;
-import com.faforever.server.message.client.ConnectionMessage;
-import com.faforever.server.message.client.SocialMessage;
 import com.faforever.server.message.client.dto.AvatarInfo;
 import com.faforever.server.message.client.dto.LeaderboardStats;
 import com.faforever.server.message.client.dto.PlayerInfo;
@@ -24,7 +21,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class MessageSerializationTest {
+public class ClientMessageSerializationTest {
 
     private JsonMapper jsonMapper;
 
@@ -40,12 +37,13 @@ public class MessageSerializationTest {
         AdminMessage.NoticeInfo message = new AdminMessage.NoticeInfo("test", AdminMessage.Style.INFO);
 
         JSONAssert.assertEquals("""
-                {
-                    "command": "notice",
+                                {
+                                    "command": "notice",
                                     "text": "test",
-                    "style": "info"
-                }
-                """, jsonMapper.writeValueAsString((AdminMessage.Server) message), JSONCompareMode.NON_EXTENSIBLE);
+                                    "style": "info"
+                                }
+                                """, jsonMapper.writeValueAsString((AdminMessage.Server) message),
+                                JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @Test
@@ -174,14 +172,14 @@ public class MessageSerializationTest {
         );
 
         JSONAssert.assertEquals("""
-                {
-                    "command": "social",
-                                                                    "autojoin": [],
-                                                                    "channels": [],
-                                                                    "friends": [],
-                                                                    "foes": [],
-                                                                    "power": 0
-                }
+                                {
+                                    "command": "social",
+                                    "autojoin": [],
+                                    "channels": [],
+                                    "friends": [],
+                                    "foes": [],
+                                    "power": 0
+                                }
                                 """, jsonMapper.writeValueAsString((SocialMessage.Server) emptyMessage),
                                 JSONCompareMode.NON_EXTENSIBLE);
     }

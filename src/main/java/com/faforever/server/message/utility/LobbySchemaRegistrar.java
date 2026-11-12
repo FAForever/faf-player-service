@@ -1,5 +1,8 @@
-package com.faforever.server.message.client;
+package com.faforever.server.message.utility;
 
+import com.faforever.server.message.client.AdminMessage;
+import com.faforever.server.message.client.ConnectionMessage;
+import com.faforever.server.message.client.SocialMessage;
 import com.faforever.server.message.service.LobbySchemaDetails;
 import com.fasterxml.classmate.ResolvedType;
 import com.fasterxml.jackson.annotation.JsonCreator;

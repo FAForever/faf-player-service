@@ -17,8 +17,6 @@ import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.OutboundTarget;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
-import com.faforever.server.rating.LeaderboardRating;
-import com.faforever.server.rating.LeaderboardRatingRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
@@ -44,6 +42,7 @@ import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentCaptor.captor;
@@ -71,21 +70,13 @@ class PlayerStateTrackerTest {
     PlayerStateTracker playerStateTracker;
 
     @InjectMock
-    private FriendOrFoeRepository friendOrFoeRepository;
-    @InjectMock
     private GeoIpService geoIpService;
     @InjectMock
-    private AvatarRepository avatarRepository;
-    @InjectMock
-    private LeaderboardRatingRepository leaderboardRatingRepository;
+    private PlayerStateRepository playerStateRepository;
     @InjectMock
     private Emitter<Map<String, String>> playerConnectionsRequestEmitter;
     @InjectMock
     private Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
-    @InjectMock
-    private PlayerRepository playerRepository;
-    @InjectMock
-    private UserGroupAssignmentRepository userGroupAssignmentRepository;
 
     private final PlayerEntity playerEntity = new PlayerEntity();
 
@@ -111,7 +102,7 @@ class PlayerStateTrackerTest {
         leaderboardRatingEntity.setMean(1000d);
         leaderboardRatingEntity.setDeviation(100d);
 
-        when(leaderboardRatingRepository.loadPlayerRatings(PLAYER_ID)).thenReturn(List.of(leaderboardRatingEntity));
+        when(playerStateRepository.loadPlayerRatings(PLAYER_ID)).thenReturn(List.of(leaderboardRatingEntity));
     }
 
     @Test
@@ -126,19 +117,19 @@ class PlayerStateTrackerTest {
 
         @Test
         void testRegisterSession() {
-            when(friendOrFoeRepository.loadFriendsAndFoes(PLAYER_ID)).thenReturn(
+            when(playerStateRepository.loadFriendsAndFoes(PLAYER_ID)).thenReturn(
                     List.of(new FriendOrFoeEntity(new FriendOrFoeEntity.Id(PLAYER_ID, 3),
                                                   FriendOrFoeEntity.Status.FRIEND),
                             new FriendOrFoeEntity(new FriendOrFoeEntity.Id(PLAYER_ID, 4),
                                                   FriendOrFoeEntity.Status.FOE)));
-            when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
             when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
             playerStateTracker.handlePlayerSessionStatus(
                     new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
                             Duration.ofSeconds(1))));
 
-            verify(playerRepository).updatePlayerIpAddress(PLAYER_ID, "127.0.0.1");
+            verify(playerStateRepository).updatePlayerIpAddress(PLAYER_ID, "127.0.0.1");
 
             Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
             assertThat(dirtyPlayers.keySet(), hasSize(1));
@@ -194,10 +185,10 @@ class PlayerStateTrackerTest {
 
         @Test
         void testRegisterSessionAsModerator() {
-            when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
             when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
-            when(userGroupAssignmentRepository.isPlayerModerator(PLAYER_ID)).thenReturn(true);
+            when(playerStateRepository.isPlayerModerator(PLAYER_ID)).thenReturn(true);
 
             playerStateTracker.handlePlayerSessionStatus(
                     new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
@@ -225,7 +216,7 @@ class PlayerStateTrackerTest {
             clan.setTag("TEST");
             playerEntity.setClan(clan);
 
-            when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
             when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
             playerStateTracker.handlePlayerSessionStatus(
@@ -299,7 +290,7 @@ class PlayerStateTrackerTest {
             Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
             assertThat(dirtyPlayers.keySet(), hasSize(0));
 
-            verifyNoInteractions(avatarRepository);
+            verifyNoInteractions(playerStateRepository);
         }
 
     }
@@ -309,7 +300,7 @@ class PlayerStateTrackerTest {
 
         @BeforeEach
         void setup() {
-            when(playerRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
             when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
 
             playerStateTracker.handlePlayerSessionStatus(
@@ -319,7 +310,7 @@ class PlayerStateTrackerTest {
 
         @Test
         void testDoubleRegistrationThrowsWhenDifferentPlayers() {
-            when(playerRepository.loadPlayer(2)).thenReturn(Optional.of(playerEntity));
+            when(playerStateRepository.loadPlayer(2)).thenReturn(Optional.of(playerEntity));
             assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(
                     new PlayerSessionState(2, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
                             Duration.ofSeconds(1)))));
@@ -414,20 +405,22 @@ class PlayerStateTrackerTest {
 
         @Test
         void testUpdateLeaderboards() {
+            String leaderboard = "leaderboard";
+            double deviation = 10d;
+            double mean = 100d;
+            int totalGames = 2;
 
             LeaderboardEntity leaderboardEntity = new LeaderboardEntity();
-            leaderboardEntity.setTechnicalName("leaderboard");
+            leaderboardEntity.setTechnicalName(leaderboard);
 
             LeaderboardRatingEntity leaderboardRatingEntity = new LeaderboardRatingEntity();
-            leaderboardRatingEntity.setDeviation(0d);
-            leaderboardRatingEntity.setMean(0d);
+            leaderboardRatingEntity.setDeviation(deviation);
+            leaderboardRatingEntity.setMean(mean);
             leaderboardRatingEntity.setPlayerId(PLAYER_ID);
-            leaderboardRatingEntity.setTotalGames(2);
+            leaderboardRatingEntity.setTotalGames(totalGames);
             leaderboardRatingEntity.setLeaderboard(leaderboardEntity);
-            when(leaderboardRatingRepository.loadUpdatedLeaderboardRatings(anyCollection(), any())).thenReturn(
+            when(playerStateRepository.loadUpdatedLeaderboardRatings(anyCollection(), any())).thenReturn(
                     List.of(leaderboardRatingEntity));
-
-            LeaderboardRating leaderboardRating = LeaderboardRating.from(leaderboardRatingEntity);
 
             playerStateTracker.updatePlayerLeaderboardRatings();
 
@@ -435,7 +428,8 @@ class PlayerStateTrackerTest {
             assertThat(dirtyPlayers.keySet(), hasSize(1));
 
             Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(Set.of(leaderboardRating), dirtyPlayer.getLeaderboardRatings());
+            assertEquals(Set.of(new LeaderboardRating(leaderboard, totalGames, mean, deviation)),
+                         dirtyPlayer.getLeaderboardRatings());
             assertEquals(PLAYER_ID, dirtyPlayer.getId());
         }
 
@@ -461,11 +455,13 @@ class PlayerStateTrackerTest {
         @Test
         void testUpdatePlayerAvatar() {
             int avatarId = 2;
+            String url = "temp";
+            String description = "other";
             AvatarEntity avatar = new AvatarEntity();
             avatar.setId(avatarId);
-            avatar.setUrl("temp");
-            avatar.setDescription("other");
-            when(avatarRepository.findAvatar(avatarId)).thenReturn(Optional.of(avatar));
+            avatar.setUrl(url);
+            avatar.setDescription(description);
+            when(playerStateRepository.findAvatar(avatarId)).thenReturn(Optional.of(avatar));
 
             playerStateTracker.handlePlayerAvatar(new PlayerAvatarUpdate(PLAYER_ID, avatarId));
 
@@ -474,7 +470,11 @@ class PlayerStateTrackerTest {
 
             Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
             assertEquals(PLAYER_ID, dirtyPlayer.getId());
-            assertEquals(Avatar.from(avatar), dirtyPlayer.getAvatar());
+            Avatar dirtyAvatar = dirtyPlayer.getAvatar();
+            assertNotNull(dirtyAvatar);
+            assertEquals(avatarId, dirtyAvatar.id());
+            assertEquals(url, dirtyAvatar.url());
+            assertEquals(description, dirtyAvatar.description());
         }
 
         @Test
