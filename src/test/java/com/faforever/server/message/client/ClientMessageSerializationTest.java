@@ -37,12 +37,13 @@ public class ClientMessageSerializationTest {
         AdminMessage.NoticeInfo message = new AdminMessage.NoticeInfo("test", AdminMessage.Style.INFO);
 
         JSONAssert.assertEquals("""
-                {
-                    "command": "notice",
+                                {
+                                    "command": "notice",
                                     "text": "test",
-                    "style": "info"
-                }
-                """, jsonMapper.writeValueAsString((AdminMessage.Server) message), JSONCompareMode.NON_EXTENSIBLE);
+                                    "style": "info"
+                                }
+                                """, jsonMapper.writeValueAsString((AdminMessage.Server) message),
+                                JSONCompareMode.NON_EXTENSIBLE);
     }
 
     @Test
@@ -171,14 +172,14 @@ public class ClientMessageSerializationTest {
         );
 
         JSONAssert.assertEquals("""
-                {
-                    "command": "social",
-                                                                    "autojoin": [],
-                                                                    "channels": [],
-                                                                    "friends": [],
-                                                                    "foes": [],
-                                                                    "power": 0
-                }
+                                {
+                                    "command": "social",
+                                    "autojoin": [],
+                                    "channels": [],
+                                    "friends": [],
+                                    "foes": [],
+                                    "power": 0
+                                }
                                 """, jsonMapper.writeValueAsString((SocialMessage.Server) emptyMessage),
                                 JSONCompareMode.NON_EXTENSIBLE);
     }

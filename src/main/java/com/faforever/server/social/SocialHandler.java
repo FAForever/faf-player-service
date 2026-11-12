@@ -98,5 +98,4 @@ class SocialHandler {
     private void removeSocialRelationship(int playerId, int targetId) {
         socialRepository.deletePlayerRelationship(new FriendOrFoeEntity.Id(playerId, targetId));
     }
-
 }

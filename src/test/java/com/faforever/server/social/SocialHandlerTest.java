@@ -41,13 +41,10 @@ class SocialHandlerTest {
     @InjectMock
     private SocialRepository socialRepository;
 
-    private final AvatarEntity avatarEntity = new AvatarEntity();
 
     @BeforeEach
     void setup() {
-        avatarEntity.setId(5);
-        avatarEntity.setUrl("temp");
-        avatarEntity.setDescription("temporary");
+
     }
 
     @Test
@@ -88,6 +85,11 @@ class SocialHandlerTest {
 
     @Test
     void testSendAvatars() {
+        AvatarEntity avatarEntity = new AvatarEntity();
+        avatarEntity.setId(5);
+        avatarEntity.setUrl("temp");
+        avatarEntity.setDescription("temporary");
+
         when(socialRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(List.of(avatarEntity));
 
         String requestId = "12345";
@@ -107,7 +109,7 @@ class SocialHandlerTest {
         when(socialRepository.updateSelectedAvatar(PLAYER_ID, "new")).thenReturn(avatarId);
 
         socialHandler.handleSocialRequest(
-                createInboundMessage(new SocialMessage.SelectAvatarRequest("", avatarEntity.getUrl())));
+                createInboundMessage(new SocialMessage.SelectAvatarRequest("", "new")));
 
         verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, avatarId));
     }
