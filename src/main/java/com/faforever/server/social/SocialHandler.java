@@ -1,6 +1,5 @@
 package com.faforever.server.social;
 
-import com.faforever.server.domain.AvatarEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
 import com.faforever.server.interceptor.cdi.MDCPopulated;
 import com.faforever.server.message.client.LobbyMessage;
@@ -60,9 +59,8 @@ class SocialHandler {
             }
             case SocialMessage.SelectAvatarRequest(_, String avatarUrl) -> {
                 LOG.info("Selecting avatar {}", avatarUrl);
-                AvatarEntity avatarEntity = socialRepository.updateSelectedAvatar(playerId, avatarUrl);
-                Avatar avatar = new Avatar(avatarEntity.getId(), avatarEntity.getUrl(), avatarEntity.getDescription());
-                outboundAvatarUpdateEmitter.send(new PlayerAvatarUpdate(playerId, avatar.id()));
+                int avatarId = socialRepository.updateSelectedAvatar(playerId, avatarUrl);
+                outboundAvatarUpdateEmitter.send(new PlayerAvatarUpdate(playerId, avatarId));
             }
             case SocialMessage.RemoveAvatarRequest _ -> {
                 LOG.info("Removing avatar");

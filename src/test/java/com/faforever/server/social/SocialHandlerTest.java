@@ -103,17 +103,13 @@ class SocialHandlerTest {
 
     @Test
     void testSelectAvatar() {
-        AvatarEntity avatarEntity = new AvatarEntity();
-        avatarEntity.setId(4);
-        avatarEntity.setUrl("new");
-        avatarEntity.setDescription("newone");
-
-        when(socialRepository.updateSelectedAvatar(PLAYER_ID, "new")).thenReturn(avatarEntity);
+        int avatarId = 4;
+        when(socialRepository.updateSelectedAvatar(PLAYER_ID, "new")).thenReturn(avatarId);
 
         socialHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SelectAvatarRequest("", avatarEntity.getUrl())));
 
-        verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, 4));
+        verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, avatarId));
     }
 
     @Test

@@ -1,4 +1,4 @@
-package com.faforever.server.social;
+package com.faforever.server.player;
 
 public record Avatar(
         int id,

@@ -1,6 +1,5 @@
 package com.faforever.server.player;
 
-import com.faforever.server.social.Avatar;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;

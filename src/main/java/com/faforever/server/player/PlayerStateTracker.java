@@ -18,7 +18,6 @@ import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
 import com.faforever.server.micrometer.PlayerSessionStateResolver;
-import com.faforever.server.social.Avatar;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.aop.MeterTag;
 import io.micrometer.core.instrument.MeterRegistry;

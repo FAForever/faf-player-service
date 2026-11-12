@@ -17,7 +17,6 @@ import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.OutboundTarget;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
-import com.faforever.server.social.Avatar;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
