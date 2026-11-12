@@ -113,7 +113,8 @@ class PlayerStateTracker {
                                              resolver = PlayerSessionStateResolver.class) PlayerSessionState playerSessionStatus) {
         switch (playerSessionStatus.state()) {
             case PlayerSessionState.State.New(Duration secondsToExpiry) -> {
-                registerPlayerSession(playerSessionStatus, secondsToExpiry);
+                registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
+                                      playerSessionStatus.ipAddress(), secondsToExpiry);
 
                 playerStateRepository.updatePlayerIpAddress(playerSessionStatus.playerId(),
                                                             playerSessionStatus.ipAddress());
@@ -122,18 +123,15 @@ class PlayerStateTracker {
             }
 
             case PlayerSessionState.State.Existing(Duration secondsToExpiry) ->
-                    registerPlayerSession(playerSessionStatus, secondsToExpiry);
+                    registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
+                                          playerSessionStatus.ipAddress(), secondsToExpiry);
             case PlayerSessionState.State.Gone() ->
                     unregisterPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId());
         }
     }
 
-    private void registerPlayerSession(PlayerSessionState playerSessionState,
-                                       Duration secondsToExpiry) {
+    private void registerPlayerSession(long sessionId, int playerId, String ipAddress, Duration secondsToExpiry) {
         LOG.debug("Registering session");
-        int playerId = playerSessionState.playerId();
-        long sessionId = playerSessionState.sessionId();
-        String ipAddress = playerSessionState.ipAddress();
         Player player = playerIdMap.computeIfAbsent(playerId, key -> initializePlayer(key, ipAddress));
         Player existingPlayer = sessionPlayerMap.putIfAbsent(sessionId, player);
         if (existingPlayer != null && existingPlayer != player) {
