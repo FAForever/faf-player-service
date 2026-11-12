@@ -12,7 +12,6 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -40,12 +39,6 @@ class SocialHandlerTest {
 
     @InjectMock
     private SocialRepository socialRepository;
-
-
-    @BeforeEach
-    void setup() {
-
-    }
 
     @Test
     void testAddRemoveFriend() {
