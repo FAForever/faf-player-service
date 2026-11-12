@@ -406,20 +406,22 @@ class PlayerStateTrackerTest {
 
         @Test
         void testUpdateLeaderboards() {
+            String leaderboard = "leaderboard";
+            double deviation = 10d;
+            double mean = 100d;
+            int totalGames = 2;
 
             LeaderboardEntity leaderboardEntity = new LeaderboardEntity();
-            leaderboardEntity.setTechnicalName("leaderboard");
+            leaderboardEntity.setTechnicalName(leaderboard);
 
             LeaderboardRatingEntity leaderboardRatingEntity = new LeaderboardRatingEntity();
-            leaderboardRatingEntity.setDeviation(0d);
-            leaderboardRatingEntity.setMean(0d);
+            leaderboardRatingEntity.setDeviation(deviation);
+            leaderboardRatingEntity.setMean(mean);
             leaderboardRatingEntity.setPlayerId(PLAYER_ID);
-            leaderboardRatingEntity.setTotalGames(2);
+            leaderboardRatingEntity.setTotalGames(totalGames);
             leaderboardRatingEntity.setLeaderboard(leaderboardEntity);
             when(playerStateRepository.loadUpdatedLeaderboardRatings(anyCollection(), any())).thenReturn(
                     List.of(leaderboardRatingEntity));
-
-            LeaderboardRating leaderboardRating = PlayerStateTracker.convert(leaderboardRatingEntity);
 
             playerStateTracker.updatePlayerLeaderboardRatings();
 
@@ -427,7 +429,8 @@ class PlayerStateTrackerTest {
             assertThat(dirtyPlayers.keySet(), hasSize(1));
 
             Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(Set.of(leaderboardRating), dirtyPlayer.getLeaderboardRatings());
+            assertEquals(Set.of(new LeaderboardRating(leaderboard, totalGames, mean, deviation)),
+                         dirtyPlayer.getLeaderboardRatings());
             assertEquals(PLAYER_ID, dirtyPlayer.getId());
         }
 

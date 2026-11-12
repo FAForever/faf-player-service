@@ -1,6 +1,7 @@
 package com.faforever.server.player;
 
 import com.faforever.server.domain.AvatarEntity;
+import com.faforever.server.domain.ClanEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
 import com.faforever.server.domain.LeaderboardRatingEntity;
 import com.faforever.server.domain.PlayerEntity;
@@ -156,7 +157,7 @@ class PlayerStateTracker {
 
         Set<LeaderboardRating> leaderboardRatings = playerStateRepository.loadPlayerRatings(playerEntity.getId())
                                                                          .stream()
-                                                                         .map(PlayerStateTracker::convert)
+                                                                         .map(this::toLeaderboardRating)
                                                                          .collect(Collectors.toSet());
 
         Player loadedPlayer = new Player(playerEntity.getId(), playerEntity.getName());
@@ -165,8 +166,9 @@ class PlayerStateTracker {
             loadedPlayer.setAvatar(
                     new Avatar(avatarEntity.getId(), avatarEntity.getUrl(), avatarEntity.getDescription()));
         }
-        if (playerEntity.getClan() != null) {
-            loadedPlayer.setClan(playerEntity.getClan().getTag());
+        ClanEntity clan = playerEntity.getClan();
+        if (clan != null) {
+            loadedPlayer.setClan(clan.getTag());
         }
         loadedPlayer.updateLeaderboardRatings(leaderboardRatings);
         loadedPlayer.setCountry(geoIpService.findCountry(ipAddress));
@@ -201,7 +203,7 @@ class PlayerStateTracker {
 
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new ConnectionMessage.LoginSuccessResponse(
-                                                                                 convert(player),
+                                                                                 toPlayerInfo(player),
                                                                                  OffsetDateTime.now())));
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new SocialMessage.SocialInfo(channels,
@@ -212,7 +214,7 @@ class PlayerStateTracker {
                                                                                                               FriendOrFoeEntity.Status.FOE,
                                                                                                               Set.of()))));
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId, new SocialMessage.PlayerInfoList(
-                playerIdMap.values().stream().map(PlayerStateTracker::convert).collect(Collectors.toSet()))));
+                playerIdMap.values().stream().map(this::toPlayerInfo).collect(Collectors.toSet()))));
 
         dirtyPlayersIdMap.put(player.getId(), player);
     }
@@ -311,7 +313,7 @@ class PlayerStateTracker {
                                                                                       .collect(Collectors.groupingBy(
                                                                                               LeaderboardRatingEntity::getPlayerId,
                                                                                               Collectors.mapping(
-                                                                                                      PlayerStateTracker::convert,
+                                                                                                      this::toLeaderboardRating,
                                                                                                       Collectors.toSet())));
 
         if (playerIdRatingMap.isEmpty()) {
@@ -338,7 +340,7 @@ class PlayerStateTracker {
 
         Set<PlayerInfo> playerInfos = frozenDirtyPlayers.values()
                                                         .stream()
-                                                        .map(PlayerStateTracker::convert)
+                                                        .map(this::toPlayerInfo)
                                                         .collect(Collectors.toSet());
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(playerInfos)));
 
@@ -354,34 +356,36 @@ class PlayerStateTracker {
         dirtyPlayersIdMap.put(playerId, player);
     }
 
-    static LeaderboardRating convert(LeaderboardRatingEntity leaderboardRatingEntity) {
+    private LeaderboardRating toLeaderboardRating(LeaderboardRatingEntity leaderboardRatingEntity) {
         return new LeaderboardRating(leaderboardRatingEntity.getLeaderboard().getTechnicalName(),
                                      leaderboardRatingEntity.getTotalGames(), leaderboardRatingEntity.getMean(),
                                      leaderboardRatingEntity.getDeviation());
     }
 
-    static PlayerInfo convert(Player player) {
+    private PlayerInfo toPlayerInfo(Player player) {
         Map<String, LeaderboardStats> leaderboardStatsMap = player.getLeaderboardRatings()
                                                                   .stream()
-                                                                  .map(leaderboardRating -> {
-                                                                      LeaderboardStats.Rating rating = new LeaderboardStats.Rating(
-                                                                              leaderboardRating.mean(),
-                                                                              leaderboardRating.deviation());
-                                                                      LeaderboardStats leaderboardStats = new LeaderboardStats(
-                                                                              leaderboardRating.totalGames(), rating);
-                                                                      return Map.entry(leaderboardRating.leaderboard(),
-                                                                                       leaderboardStats);
-                                                                  })
-                                                                  .collect(Collectors.toMap(Map.Entry::getKey,
-                                                                                            Map.Entry::getValue));
+                                                                  .collect(Collectors.toMap(
+                                                                          LeaderboardRating::leaderboard,
+                                                                          leaderboardRating -> {
+                                                                              LeaderboardStats.Rating rating = new LeaderboardStats.Rating(
+                                                                                      leaderboardRating.mean(),
+                                                                                      leaderboardRating.deviation());
+                                                                              return new LeaderboardStats(
+                                                                                      leaderboardRating.totalGames(),
+                                                                                      rating);
+                                                                          }));
         PlayerInfo.State state = switch (player.getState()) {
             case ONLINE -> null;
             case OFFLINE -> PlayerInfo.State.OFFLINE;
         };
         String clan = player.getClan();
         Avatar playerAvatar = player.getAvatar();
-        AvatarInfo avatar = playerAvatar == null ? null : AvatarInfo.from(playerAvatar);
+        AvatarInfo avatar = playerAvatar == null ?
+                            null :
+                            new AvatarInfo(playerAvatar.url(), playerAvatar.description());
         return new PlayerInfo(player.getId(), player.getUsername(), clan, avatar, player.getCountry(),
                               leaderboardStatsMap, state);
     }
+
 }
