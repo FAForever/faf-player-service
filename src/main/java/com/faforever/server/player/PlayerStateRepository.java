@@ -14,7 +14,7 @@ import java.util.Optional;
 interface PlayerStateRepository {
 
     @Query("""
-           select new Player(p.id, p.name, p.clan.tag, a.url, a.description)
+           select new Player(p.id, p.name, c.tag, a.url, a.description)
            from PlayerEntity p
            left join AvatarEntity a on a = p.selectedAvatar
            left join ClanEntity c on c = p.clan

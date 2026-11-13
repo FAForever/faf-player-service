@@ -124,8 +124,7 @@ class PlayerStateTracker {
             case PlayerSessionState.State.Existing(Duration secondsToExpiry) ->
                     registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
                                           playerSessionStatus.ipAddress(), secondsToExpiry);
-            case PlayerSessionState.State.Gone() ->
-                    unregisterPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId());
+            case PlayerSessionState.State.Gone() -> unregisterSession(playerSessionStatus.sessionId());
         }
     }
 
@@ -205,30 +204,27 @@ class PlayerStateTracker {
         dirtyPlayersIdMap.put(player.getId(), player);
     }
 
-    private void unregisterPlayerSession(long sessionId, int playerId) {
+    private void unregisterSession(long sessionId) {
         LOG.info("Removing session");
-        playerIdMap.computeIfPresent(playerId, (_, player) -> {
-            sessionExpirationMap.remove(sessionId);
+        sessionExpirationMap.remove(sessionId);
+        Player player = sessionPlayerMap.get(sessionId);
+        if (player == null) {
+            LOG.warn("No player associated with session");
+            return;
+        }
 
-            if (!sessionPlayerMap.remove(sessionId, player)) {
-                return player;
-            }
-
-            Set<Long> remainingSessions = playerSessionMap.computeIfPresent(player, (_, sessions) -> {
-                if (sessions.remove(sessionId) && sessions.isEmpty()) {
-                    return null;
-                } else {
-                    return sessions;
-                }
-            });
-
-            if (remainingSessions == null) {
-                dirtyPlayersIdMap.put(player.getId(), player);
+        Set<Long> remainingSessions = playerSessionMap.computeIfPresent(player, (_, sessions) -> {
+            if (sessions.remove(sessionId) && sessions.isEmpty()) {
                 return null;
             } else {
-                return player;
+                return sessions;
             }
         });
+
+        if (remainingSessions == null) {
+            playerIdMap.remove(player.getId(), player);
+            dirtyPlayersIdMap.put(player.getId(), player);
+        }
     }
 
     @Incoming("avatar-updates")
@@ -268,7 +264,7 @@ class PlayerStateTracker {
                 MDC.put(MDCInterceptor.SESSION_ID, String.valueOf(expiredSessionId));
                 MDC.put(MDCInterceptor.PLAYER_ID, String.valueOf(player.getId()));
 
-                unregisterPlayerSession(expiredSessionId, player.getId());
+                unregisterSession(expiredSessionId);
 
                 MDC.remove(MDCInterceptor.SESSION_ID);
                 MDC.remove(MDCInterceptor.PLAYER_ID);
