@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.Set;
 
 public sealed interface SocialMessage {
 
@@ -30,6 +31,10 @@ public sealed interface SocialMessage {
     ) implements Server, LobbyMessage.Broadcast {
         public static final String COMMAND = "player_info";
 
+        public PlayerInfoList {
+            players = Set.copyOf(players);
+        }
+
         @Override
         public String command() {
             return COMMAND;
@@ -41,6 +46,10 @@ public sealed interface SocialMessage {
             @JsonProperty("avatarlist") Collection<AvatarInfo> avatars
     ) implements Server {
         public static final String COMMAND = "avatar";
+
+        public AvatarInfoList {
+            avatars = Set.copyOf(avatars);
+        }
 
         @Override
         public String command() {
@@ -54,6 +63,12 @@ public sealed interface SocialMessage {
             @JsonProperty("foes") Collection<Integer> foeIds
     ) implements Server {
         public static final String COMMAND = "social";
+
+        public SocialInfo {
+            channels = Set.copyOf(channels);
+            friendIds = Set.copyOf(friendIds);
+            foeIds = Set.copyOf(foeIds);
+        }
 
         @JsonProperty("autojoin")
         public Collection<String> autojoin() {
