@@ -16,10 +16,10 @@ import java.util.Optional;
 interface SocialRepository {
 
     @Transactional
-    @Query("select new AvatarInfo(a.avatar.url, a.avatar.description) from AssignedAvatarEntity a where a.playerId = :playerId and (a.expirationDate is null or a.expirationDate < current_timestamp)")
+    @Query("select new AvatarInfo(a.avatar.url, a.avatar.description) from AssignedAvatarEntity a where a.playerId = :playerId and (a.expirationDate is null or a.expirationDate > current_timestamp)")
     List<AvatarInfo> findAssignedAvatarsByPlayer(int playerId);
 
-    @Query("select a.avatar.id from AssignedAvatarEntity a where a.playerId = :playerId and a.avatar.url = :avatarUrl and (a.expirationDate is null or a.expirationDate < current_timestamp)")
+    @Query("select a.avatar.id from AssignedAvatarEntity a where a.playerId = :playerId and a.avatar.url = :avatarUrl and (a.expirationDate is null or a.expirationDate > current_timestamp)")
     Optional<Integer> findAssignedAvatarIdByPlayer(int playerId,
                                                    String avatarUrl);
 
