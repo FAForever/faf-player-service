@@ -3,7 +3,6 @@ package com.faforever.server.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
-import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SourceType;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -12,7 +11,7 @@ import java.time.Instant;
 
 @MappedSuperclass
 @Getter
-@Setter
+@SuppressWarnings("NullAway.Init")
 abstract class TimeTrackedEntity extends AbstractEntity {
 
     @Column(name = "create_time")

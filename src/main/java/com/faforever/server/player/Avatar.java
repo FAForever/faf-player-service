@@ -1,7 +1,6 @@
 package com.faforever.server.player;
 
-public record Avatar(
-        int id,
+record Avatar(
         String url,
         String description
 ) {}

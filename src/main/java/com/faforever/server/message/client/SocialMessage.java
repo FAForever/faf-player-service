@@ -9,7 +9,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
-import java.util.Set;
 
 public sealed interface SocialMessage {
 
@@ -27,7 +26,7 @@ public sealed interface SocialMessage {
     sealed interface Client extends SocialMessage, LobbyMessage.Client {}
 
     record PlayerInfoList(
-            Set<PlayerInfo> players
+            Collection<PlayerInfo> players
     ) implements Server, LobbyMessage.Broadcast {
         public static final String COMMAND = "player_info";
 
@@ -39,7 +38,7 @@ public sealed interface SocialMessage {
 
     record AvatarInfoList(
             String requestId,
-            @JsonProperty("avatarlist") Set<AvatarInfo> avatars
+            @JsonProperty("avatarlist") Collection<AvatarInfo> avatars
     ) implements Server {
         public static final String COMMAND = "avatar";
 

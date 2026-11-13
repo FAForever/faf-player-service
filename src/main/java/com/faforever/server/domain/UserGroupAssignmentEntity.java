@@ -5,14 +5,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 @Getter
-@Setter
 @Entity
 @Table(name = "user_group_assignment")
-public class UserGroupAssignment extends AbstractEntity {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@SuppressWarnings("NullAway.Init")
+public class UserGroupAssignmentEntity extends AbstractEntity {
 
     @Column(name = "user_id")
     private int userId;
