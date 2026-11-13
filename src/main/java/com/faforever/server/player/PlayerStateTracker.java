@@ -93,14 +93,13 @@ class PlayerStateTracker {
                                                                new ConcurrentHashMap<>());
         this.sessionPlayerIdMap = meterRegistry.gaugeMapSize("faf.sessions", Tags.of("state", "online"),
                                                              new ConcurrentHashMap<>());
-        this.sessionExpirationMap =
-                Objects.requireNonNull(
-                        meterRegistry.gauge("faf.sessions", Tags.of("state", "expired"), new ConcurrentHashMap<>(),
-                                            sessionsExpiredMap -> sessionsExpiredMap.values()
-                                                                                    .stream()
-                                                                                    .filter(instant -> instant.isAfter(
-                                                                                            clock.instant()))
-                                                                                    .count()));
+        this.sessionExpirationMap = Objects.requireNonNull(
+                meterRegistry.gauge("faf.sessions", Tags.of("state", "expired"), new ConcurrentHashMap<>(),
+                                    sessionsExpiredMap -> sessionsExpiredMap.values()
+                                                                            .stream()
+                                                                            .filter(instant -> instant.isAfter(
+                                                                                    clock.instant()))
+                                                                            .count()));
     }
 
     @PostConstruct
@@ -267,17 +266,16 @@ class PlayerStateTracker {
 
         LOG.info("Removing {} expired sessions", expiredSessionIds.size());
         expiredSessionIds.forEach(expiredSessionId -> {
+            MDC.put(MDCInterceptor.SESSION_ID, String.valueOf(expiredSessionId));
             Integer playerId = sessionPlayerIdMap.get(expiredSessionId);
             if (playerId != null) {
-                MDC.put(MDCInterceptor.SESSION_ID, String.valueOf(expiredSessionId));
                 MDC.put(MDCInterceptor.PLAYER_ID, String.valueOf(playerId));
-
-                unregisterSession(expiredSessionId);
-
-                MDC.remove(MDCInterceptor.SESSION_ID);
-                MDC.remove(MDCInterceptor.PLAYER_ID);
             }
-            sessionExpirationMap.remove(expiredSessionId);
+
+            unregisterSession(expiredSessionId);
+
+            MDC.remove(MDCInterceptor.SESSION_ID);
+            MDC.remove(MDCInterceptor.PLAYER_ID);
         });
     }
 
@@ -331,12 +329,11 @@ class PlayerStateTracker {
     }
 
     void updatePlayer(int playerId, Consumer<Player> updater) {
-        Player player = playerIdMap.get(playerId);
-        if (player == null) {
-            return;
-        }
-        updater.accept(player);
-        markDirty(player);
+        playerIdMap.computeIfPresent(playerId, (_, player) -> {
+            updater.accept(player);
+            markDirty(player);
+            return player;
+        });
     }
 
     private void markDirty(Player player) {
