@@ -4,7 +4,7 @@ import com.faforever.server.message.client.dto.PlayerInfo;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 public sealed interface ConnectionMessage {
 
@@ -14,7 +14,7 @@ public sealed interface ConnectionMessage {
 
     record LoginSuccessResponse(
             PlayerInfo me,
-            OffsetDateTime currentTime
+            Instant currentTime
     ) implements Server {
         public static final String COMMAND = "welcome";
 

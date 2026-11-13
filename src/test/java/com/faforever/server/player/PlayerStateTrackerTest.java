@@ -1,11 +1,6 @@
 package com.faforever.server.player;
 
-import com.faforever.server.domain.AvatarEntity;
-import com.faforever.server.domain.ClanEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
-import com.faforever.server.domain.LeaderboardEntity;
-import com.faforever.server.domain.LeaderboardRatingEntity;
-import com.faforever.server.domain.PlayerEntity;
 import com.faforever.server.geoip.GeoIpService;
 import com.faforever.server.message.client.ConnectionMessage;
 import com.faforever.server.message.client.LobbyMessage;
@@ -14,41 +9,37 @@ import com.faforever.server.message.client.dto.AvatarInfo;
 import com.faforever.server.message.client.dto.LeaderboardStats;
 import com.faforever.server.message.client.dto.PlayerInfo;
 import com.faforever.server.message.service.OutboundLobbyMessage;
-import com.faforever.server.message.service.OutboundTarget;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.component.QuarkusComponentTest;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.OffsetDateTime;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.isA;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentCaptor.captor;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -58,13 +49,24 @@ class PlayerStateTrackerTest {
 
     private static final int PLAYER_ID = 1;
     private static final long SESSION_ID = 0;
-    private static final PlayerInfo PLAYER_INFO = new PlayerInfo(PLAYER_ID, "test", null,
-                                                                 new AvatarInfo("temp", "temporary"), "",
-                                                                 Map.of("leaderboard", new LeaderboardStats(1,
-                                                                                                            new LeaderboardStats.Rating(
-                                                                                                                    1000,
-                                                                                                                    100))),
-                                                                 null);
+    private static final String PLAYER_NAME = "test";
+    private static final String CLAN_TAG = "TEST";
+    private static final String AVATAR_URL = "temp";
+    private static final String AVATAR_DESCRIPTION = "temporary";
+    private static final String LEADERBOARD = "leaderboard";
+    private static final int LEADERBOARD_MEAN = 1000;
+    private static final int LEADERBOARD_DEVIATION = 100;
+    private static final LeaderboardStats.Rating LEADERBOARD_RATING = new LeaderboardStats.Rating(LEADERBOARD_MEAN,
+                                                                                                  LEADERBOARD_DEVIATION);
+    private static final int LEADERBOARD_NUMBER_OF_GAMES = 1;
+    private static final LeaderboardStats LEADERBOARD_STATS = new LeaderboardStats(LEADERBOARD_NUMBER_OF_GAMES,
+                                                                                   LEADERBOARD_RATING);
+    private static final AvatarInfo AVATAR_INFO = new AvatarInfo(AVATAR_URL, AVATAR_DESCRIPTION);
+
+    private static final Avatar AVATAR = new Avatar(AVATAR_URL, AVATAR_DESCRIPTION);
+    private static final String IP_ADDRESS = "127.0.0.1";
+    private static final Instant INSTANT = Instant.now();
+    private static final String COUNTRY = "USA";
 
     @Inject
     PlayerStateTracker playerStateTracker;
@@ -78,36 +80,9 @@ class PlayerStateTrackerTest {
     @InjectMock
     private Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
 
-    private final PlayerEntity playerEntity = new PlayerEntity();
-
-    @BeforeEach
-    void setup() {
-        playerEntity.setId(PLAYER_ID);
-
-        AvatarEntity avatarEntity = new AvatarEntity();
-        avatarEntity.setId(10);
-        avatarEntity.setDescription("temporary");
-        avatarEntity.setUrl("temp");
-        playerEntity.setSelectedAvatar(avatarEntity);
-
-        playerEntity.setName("test");
-
-        LeaderboardRatingEntity leaderboardRatingEntity = new LeaderboardRatingEntity();
-
-        LeaderboardEntity leaderboardEntity = new LeaderboardEntity();
-        leaderboardEntity.setTechnicalName("leaderboard");
-        leaderboardRatingEntity.setLeaderboard(leaderboardEntity);
-
-        leaderboardRatingEntity.setTotalGames(1);
-        leaderboardRatingEntity.setMean(1000d);
-        leaderboardRatingEntity.setDeviation(100d);
-
-        when(playerStateRepository.loadPlayerRatings(PLAYER_ID)).thenReturn(List.of(leaderboardRatingEntity));
-    }
-
     @Test
     void testExistingPlayersRegistered() {
-        assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+        assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
 
         verify(playerConnectionsRequestEmitter).send(Map.of());
     }
@@ -117,153 +92,177 @@ class PlayerStateTrackerTest {
 
         @Test
         void testRegisterSession() {
-            when(playerStateRepository.loadFriendsAndFoes(PLAYER_ID)).thenReturn(
-                    List.of(new FriendOrFoeEntity(new FriendOrFoeEntity.Id(PLAYER_ID, 3),
-                                                  FriendOrFoeEntity.Status.FRIEND),
-                            new FriendOrFoeEntity(new FriendOrFoeEntity.Id(PLAYER_ID, 4),
-                                                  FriendOrFoeEntity.Status.FOE)));
-            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
-            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
+            Player player = new Player(PLAYER_ID, PLAYER_NAME, null, null, null);
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(player));
 
-            playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1))));
+            when(geoIpService.findCountry(IP_ADDRESS)).thenReturn(COUNTRY);
 
-            verify(playerStateRepository).updatePlayerIpAddress(PLAYER_ID, "127.0.0.1");
+            Duration secondsToExpiry = Duration.ofSeconds(1);
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        secondsToExpiry)));
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
+            verify(playerStateRepository).updatePlayerIpAddress(PLAYER_ID, IP_ADDRESS);
 
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(Player.State.ONLINE, dirtyPlayer.getState());
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
-            assertEquals(Set.of(new LeaderboardRating("leaderboard", 1, 1000, 100)),
-                         dirtyPlayer.getLeaderboardRatings());
+            assertTrue(playerStateTracker.getPlayerIdMap().containsKey(PLAYER_ID));
+            PlayerInfo expectedPlayerInfo = new PlayerInfo(PLAYER_ID, PLAYER_NAME, null, null, COUNTRY, Map.of(), null);
 
-            ArgumentCaptor<OutboundLobbyMessage<LobbyMessage.Server>> messageRequestCaptor = captor();
-            verify(outboundLobbyMessageEmitter, times(3)).send(messageRequestCaptor.capture());
+            Map<Integer, PlayerInfo> dirtyPlayers = playerStateTracker.getDirtyPlayerInfoIdMap();
+            assertEquals(expectedPlayerInfo, dirtyPlayers.get(PLAYER_ID));
 
-            List<OutboundLobbyMessage<LobbyMessage.Server>> sentMessages = messageRequestCaptor.getAllValues();
+            ConnectionMessage.LoginSuccessResponse expectedLoginResponse = new ConnectionMessage.LoginSuccessResponse(
+                    expectedPlayerInfo, INSTANT);
+            verify(outboundLobbyMessageEmitter).send(
+                    OutboundLobbyMessage.forSession(SESSION_ID, expectedLoginResponse));
 
-            OutboundLobbyMessage<?> firstMessage = sentMessages.getFirst();
-            OutboundTarget firstTarget = firstMessage.target();
-            assertThat(firstTarget, isA(OutboundTarget.Session.class));
+            SocialMessage.SocialInfo expectedSocialInfo = new SocialMessage.SocialInfo(Set.of("#aeolus"), Set.of(),
+                                                                                       Set.of());
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID, expectedSocialInfo));
 
-            OutboundTarget.Session firstSessionTarget = (OutboundTarget.Session) firstTarget;
-            assertThat(firstSessionTarget.sessionId(), equalTo(SESSION_ID));
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
+                                                                                     new SocialMessage.PlayerInfoList(
+                                                                                             Set.of(expectedPlayerInfo))));
 
-            assertThat(firstMessage.message(), isA(ConnectionMessage.LoginSuccessResponse.class));
-
-            ConnectionMessage.LoginSuccessResponse loginSuccessResponse = (ConnectionMessage.LoginSuccessResponse) firstMessage.message();
-            assertThat(loginSuccessResponse.currentTime(), lessThanOrEqualTo(OffsetDateTime.now()));
-            assertThat(loginSuccessResponse.me(), equalTo(PLAYER_INFO));
-
-            OutboundLobbyMessage<?> secondMessage = sentMessages.get(1);
-            OutboundTarget secondTarget = secondMessage.target();
-            assertThat(secondTarget, isA(OutboundTarget.Session.class));
-
-            OutboundTarget.Session secondSessionTarget = (OutboundTarget.Session) secondTarget;
-
-            assertThat(secondSessionTarget.sessionId(), equalTo(SESSION_ID));
-            assertThat(secondMessage.message(),
-                       equalTo(new SocialMessage.SocialInfo(Set.of("#aeolus"), Set.of(3), Set.of(4))));
-
-            OutboundLobbyMessage<?> thirdMessage = sentMessages.getLast();
-            OutboundTarget thirdTarget = thirdMessage.target();
-            assertThat(thirdTarget, isA(OutboundTarget.Session.class));
-
-            OutboundTarget.Session thirdSessionTarget = (OutboundTarget.Session) thirdTarget;
-
-            assertThat(thirdSessionTarget.sessionId(), equalTo(SESSION_ID));
-            assertThat(thirdMessage.message(), isA(SocialMessage.PlayerInfoList.class));
-
-            assertThat(playerStateTracker.getSessionExpirationMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getPlayerIdMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getSessionPlayerMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getPlayerSessionMap().keySet(), hasSize(1));
+            assertEquals(INSTANT.plus(secondsToExpiry), playerStateTracker.getSessionExpirationMap().get(SESSION_ID));
+            assertEquals(player, playerStateTracker.getPlayerIdMap().get(PLAYER_ID));
+            assertEquals(PLAYER_ID, playerStateTracker.getSessionPlayerIdMap().get(SESSION_ID));
+            assertEquals(Set.of(SESSION_ID), playerStateTracker.getPlayerIdSessionMap().get(PLAYER_ID));
         }
 
         @Test
         void testRegisterSessionAsModerator() {
-            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
-            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(
+                    Optional.of(new Player(PLAYER_ID, PLAYER_NAME, null, null, null)));
+            when(geoIpService.findCountry(IP_ADDRESS)).thenReturn(COUNTRY);
 
             when(playerStateRepository.isPlayerModerator(PLAYER_ID)).thenReturn(true);
 
-            playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1))));
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        Duration.ofSeconds(1))));
 
-            ArgumentCaptor<OutboundLobbyMessage<LobbyMessage.Server>> messageRequestCaptor = captor();
-            verify(outboundLobbyMessageEmitter, times(3)).send(messageRequestCaptor.capture());
-
-            List<OutboundLobbyMessage<LobbyMessage.Server>> sentMessages = messageRequestCaptor.getAllValues();
-
-            OutboundLobbyMessage<?> secondMessage = sentMessages.get(1);
-            OutboundTarget secondTarget = secondMessage.target();
-            assertThat(secondTarget, isA(OutboundTarget.Session.class));
-
-            OutboundTarget.Session secondSessionTarget = (OutboundTarget.Session) secondTarget;
-
-            assertThat(secondSessionTarget.sessionId(), equalTo(SESSION_ID));
-            assertThat(secondMessage.message(),
-                       equalTo(new SocialMessage.SocialInfo(Set.of("#aeolus", "#moderators"), Set.of(), Set.of())));
+            SocialMessage.SocialInfo expectedSocialInfo = new SocialMessage.SocialInfo(Set.of("#aeolus", "#moderators"),
+                                                                                       Set.of(), Set.of());
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID, expectedSocialInfo));
         }
 
         @Test
         void testRegisterSessionClan() {
-            ClanEntity clan = new ClanEntity();
-            clan.setTag("TEST");
-            playerEntity.setClan(clan);
+            Player clanPlayer = new Player(PLAYER_ID, PLAYER_NAME, CLAN_TAG, null, null);
 
-            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
-            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(clanPlayer));
+            when(geoIpService.findCountry(IP_ADDRESS)).thenReturn(COUNTRY);
 
-            playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1))));
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        Duration.ofSeconds(1))));
 
-            ArgumentCaptor<OutboundLobbyMessage<LobbyMessage.Server>> messageRequestCaptor = captor();
-            verify(outboundLobbyMessageEmitter, times(3)).send(messageRequestCaptor.capture());
+            PlayerInfo expectedPlayerInfo = new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, null, COUNTRY, Map.of(),
+                                                           null);
+            ConnectionMessage.LoginSuccessResponse expectedLoginResponse = new ConnectionMessage.LoginSuccessResponse(
+                    expectedPlayerInfo, INSTANT);
+            verify(outboundLobbyMessageEmitter).send(
+                    OutboundLobbyMessage.forSession(SESSION_ID, expectedLoginResponse));
 
-            List<OutboundLobbyMessage<LobbyMessage.Server>> sentMessages = messageRequestCaptor.getAllValues();
+            SocialMessage.SocialInfo expectedSocialInfo = new SocialMessage.SocialInfo(Set.of("#aeolus", "#TEST_clan"),
+                                                                                       Set.of(), Set.of());
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID, expectedSocialInfo));
 
-            OutboundLobbyMessage<?> firstMessage = sentMessages.getFirst();
-            OutboundTarget firstTarget = firstMessage.target();
-            assertThat(firstTarget, isA(OutboundTarget.Session.class));
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
+                                                                                     new SocialMessage.PlayerInfoList(
+                                                                                             Set.of(expectedPlayerInfo))));
+        }
 
-            OutboundTarget.Session firstSessionTarget = (OutboundTarget.Session) firstTarget;
-            assertThat(firstSessionTarget.sessionId(), equalTo(SESSION_ID));
+        @Test
+        void testRegisterSessionAvatar() {
+            Player player = new Player(PLAYER_ID, PLAYER_NAME, null, AVATAR_URL, AVATAR_DESCRIPTION);
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(player));
+            when(geoIpService.findCountry(IP_ADDRESS)).thenReturn(COUNTRY);
 
-            assertThat(firstMessage.message(), isA(ConnectionMessage.LoginSuccessResponse.class));
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        Duration.ofSeconds(1))));
 
-            ConnectionMessage.LoginSuccessResponse loginSuccessResponse = (ConnectionMessage.LoginSuccessResponse) firstMessage.message();
-            assertThat(loginSuccessResponse.currentTime(), lessThanOrEqualTo(OffsetDateTime.now()));
-            assertThat(loginSuccessResponse.me(),
-                       equalTo(new PlayerInfo(PLAYER_INFO.id(), PLAYER_INFO.login(), "TEST", PLAYER_INFO.avatar(),
-                                              PLAYER_INFO.country(), PLAYER_INFO.ratings(), PLAYER_INFO.state())));
+            assertTrue(playerStateTracker.getPlayerIdMap().containsKey(PLAYER_ID));
 
-            OutboundLobbyMessage<?> secondMessage = sentMessages.get(1);
-            OutboundTarget secondTarget = secondMessage.target();
-            assertThat(secondTarget, isA(OutboundTarget.Session.class));
+            PlayerInfo expectedPlayerInfo = new PlayerInfo(PLAYER_ID, PLAYER_NAME, null, AVATAR_INFO, COUNTRY, Map.of(),
+                                                           null);
+            Map<Integer, PlayerInfo> dirtyPlayers = playerStateTracker.getDirtyPlayerInfoIdMap();
+            assertEquals(expectedPlayerInfo, dirtyPlayers.get(PLAYER_ID));
+            assertEquals(AVATAR, player.getAvatar());
 
-            OutboundTarget.Session secondSessionTarget = (OutboundTarget.Session) secondTarget;
+            ConnectionMessage.LoginSuccessResponse expectedLoginResponse = new ConnectionMessage.LoginSuccessResponse(
+                    expectedPlayerInfo, INSTANT);
+            verify(outboundLobbyMessageEmitter).send(
+                    OutboundLobbyMessage.forSession(SESSION_ID, expectedLoginResponse));
 
-            assertThat(secondSessionTarget.sessionId(), equalTo(SESSION_ID));
-            assertThat(secondMessage.message(),
-                       equalTo(new SocialMessage.SocialInfo(Set.of("#aeolus", "#TEST_clan"), Set.of(), Set.of())));
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
+                                                                                     new SocialMessage.PlayerInfoList(
+                                                                                             Set.of(expectedPlayerInfo))));
+        }
+
+        @Test
+        void testRegisterSessionFriendAndFoe() {
+            when(playerStateRepository.loadFriendsAndFoes(PLAYER_ID)).thenReturn(
+                    List.of(new FriendOrFoe(FriendOrFoeEntity.Status.FRIEND, 3),
+                            new FriendOrFoe(FriendOrFoeEntity.Status.FOE, 4)));
+
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(
+                    Optional.of(new Player(PLAYER_ID, PLAYER_NAME, null, null, null)));
+
+
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        Duration.ofSeconds(1))));
+
+            SocialMessage.SocialInfo expectedSocialInfo = new SocialMessage.SocialInfo(Set.of("#aeolus"), Set.of(3),
+                                                                                       Set.of(4));
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID, expectedSocialInfo));
+        }
+
+        @Test
+        void testRegisterSessionLeaderboardRating() {
+            Player player = new Player(PLAYER_ID, PLAYER_NAME, null, null, null);
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(player));
+            when(playerStateRepository.loadPlayerRatings(PLAYER_ID)).thenReturn(
+                    List.of(new LeaderboardRating(LEADERBOARD, LEADERBOARD_NUMBER_OF_GAMES, LEADERBOARD_MEAN,
+                                                  LEADERBOARD_DEVIATION)));
+            when(geoIpService.findCountry(IP_ADDRESS)).thenReturn(COUNTRY);
+
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        Duration.ofSeconds(1))));
+
+            verify(playerStateRepository).updatePlayerIpAddress(PLAYER_ID, IP_ADDRESS);
+
+            Map<Integer, PlayerInfo> dirtyPlayers = playerStateTracker.getDirtyPlayerInfoIdMap();
+            PlayerInfo expectedPlayerInfo = new PlayerInfo(PLAYER_ID, PLAYER_NAME, null, null, COUNTRY,
+                                                           Map.of(LEADERBOARD, LEADERBOARD_STATS), null);
+            assertEquals(expectedPlayerInfo, dirtyPlayers.get(PLAYER_ID));
+
+            assertEquals(Set.of(new LeaderboardRating(LEADERBOARD, LEADERBOARD_NUMBER_OF_GAMES, LEADERBOARD_MEAN,
+                                                      LEADERBOARD_DEVIATION)), player.getLeaderboardRatings());
+
+            ConnectionMessage.LoginSuccessResponse expectedLoginResponse = new ConnectionMessage.LoginSuccessResponse(
+                    expectedPlayerInfo, INSTANT);
+            verify(outboundLobbyMessageEmitter).send(
+                    OutboundLobbyMessage.forSession(SESSION_ID, expectedLoginResponse));
+
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
+                                                                                     new SocialMessage.PlayerInfoList(
+                                                                                             Set.of(expectedPlayerInfo))));
         }
 
         @Test
         void testRegisterSessionBadId() {
             assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1)))));
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                           new PlayerSessionState.State.New(Duration.ofSeconds(1)))));
         }
 
         @Test
         void testNoActionWhenNoDirty() {
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
             playerStateTracker.sendUpdateForDirtyPlayers();
             verifyNoInteractions(outboundLobbyMessageEmitter);
         }
@@ -271,23 +270,23 @@ class PlayerStateTrackerTest {
         @Test
         void testUnregisterSession() {
             playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Gone()));
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS, new PlayerSessionState.State.Gone()));
 
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
         }
 
         @Test
         void testUpdateLeaderboardsNoPlayers() {
             playerStateTracker.updatePlayerLeaderboardRatings();
 
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
         }
 
         @Test
         void testUpdatePlayerAvatar() {
             playerStateTracker.handlePlayerAvatar(new PlayerAvatarUpdate(PLAYER_ID, 2));
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
+            Map<Integer, PlayerInfo> dirtyPlayers = playerStateTracker.getDirtyPlayerInfoIdMap();
             assertThat(dirtyPlayers.keySet(), hasSize(0));
 
             verifyNoInteractions(playerStateRepository);
@@ -298,218 +297,203 @@ class PlayerStateTrackerTest {
     @Nested
     class Registered {
 
+        final Player player = new Player(PLAYER_ID, PLAYER_NAME, CLAN_TAG, AVATAR_URL, AVATAR_DESCRIPTION);
+
         @BeforeEach
         void setup() {
-            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(playerEntity));
-            when(geoIpService.findCountry("127.0.0.1")).thenReturn("");
+            when(playerStateRepository.loadPlayer(PLAYER_ID)).thenReturn(Optional.of(player));
+            when(playerStateRepository.loadPlayerRatings(PLAYER_ID)).thenReturn(
+                    List.of(new LeaderboardRating(LEADERBOARD, LEADERBOARD_NUMBER_OF_GAMES, LEADERBOARD_MEAN,
+                                                  LEADERBOARD_DEVIATION)));
+            when(geoIpService.findCountry(IP_ADDRESS)).thenReturn(COUNTRY);
 
-            playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
-                            Duration.ofMinutes(1))));
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.Existing(
+                                                                                        Duration.ofSeconds(1))));
         }
 
         @Test
         void testDoubleRegistrationThrowsWhenDifferentPlayers() {
-            when(playerStateRepository.loadPlayer(2)).thenReturn(Optional.of(playerEntity));
+            when(playerStateRepository.loadPlayer(2)).thenReturn(
+                    Optional.of(new Player(PLAYER_ID + 2, "other", null, null, null)));
             assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(2, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1)))));
+                    new PlayerSessionState(2, SESSION_ID, IP_ADDRESS,
+                                           new PlayerSessionState.State.New(Duration.ofSeconds(1)))));
             assertThrows(IllegalStateException.class, () -> playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(2, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
-                            Duration.ofSeconds(1)))));
+                    new PlayerSessionState(2, SESSION_ID, IP_ADDRESS,
+                                           new PlayerSessionState.State.Existing(Duration.ofSeconds(1)))));
         }
 
         @Test
         void testDoubleRegistrationDoesNotThrowWhenSamePlayer() {
             assertDoesNotThrow(() -> playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1)))));
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                           new PlayerSessionState.State.New(Duration.ofSeconds(1)))));
             assertDoesNotThrow(() -> playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
-                            Duration.ofSeconds(1)))));
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                           new PlayerSessionState.State.Existing(Duration.ofSeconds(1)))));
         }
 
         @Test
         void testUnregisterSession() {
             playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Gone()));
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS, new PlayerSessionState.State.Gone()));
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
+            assertFalse(playerStateTracker.getPlayerIdMap().containsKey(PLAYER_ID));
+            assertFalse(playerStateTracker.getSessionExpirationMap().containsKey(SESSION_ID));
+            assertFalse(playerStateTracker.getSessionPlayerIdMap().containsKey(SESSION_ID));
+            assertFalse(playerStateTracker.getPlayerIdSessionMap().containsKey(PLAYER_ID));
 
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(Player.State.OFFLINE, dirtyPlayer.getState());
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
-            assertThat(playerStateTracker.getSessionExpirationMap().keySet(), hasSize(0));
-            assertThat(playerStateTracker.getPlayerIdMap().keySet(), hasSize(0));
-            assertThat(playerStateTracker.getSessionPlayerMap().keySet(), hasSize(0));
-            assertThat(playerStateTracker.getPlayerSessionMap().keySet(), hasSize(0));
+            playerStateTracker.sendUpdateForDirtyPlayers();
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(
+                    Set.of(new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, AVATAR_INFO, COUNTRY,
+                                          Map.of(LEADERBOARD, LEADERBOARD_STATS), PlayerInfo.State.OFFLINE)))));
         }
 
         @Test
         void testUnregisterNonRegisteredSession() {
             playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, 2, "127.0.0.1", new PlayerSessionState.State.Gone()));
+                    new PlayerSessionState(PLAYER_ID, 2, IP_ADDRESS, new PlayerSessionState.State.Gone()));
 
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
+            assertTrue(playerStateTracker.getPlayerIdMap().containsKey(PLAYER_ID));
+            assertTrue(playerStateTracker.getSessionPlayerIdMap().containsKey(SESSION_ID));
+            assertTrue(playerStateTracker.getPlayerIdSessionMap().containsKey(PLAYER_ID));
         }
 
         @Test
         void testUnregisterSessionMultipleSessions() {
+            Duration secondsToExpiry = Duration.ofSeconds(1);
+            long newSessionId = 2;
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, newSessionId, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.New(
+                                                                                        secondsToExpiry)));
+
+            assertTrue(playerStateTracker.getDirtyPlayerInfoIdMap().containsKey(PLAYER_ID));
+
+            Instant expirationTime = INSTANT.plus(secondsToExpiry);
+            assertEquals(expirationTime, playerStateTracker.getSessionExpirationMap().get(SESSION_ID));
+            assertEquals(expirationTime, playerStateTracker.getSessionExpirationMap().get(newSessionId));
+            assertEquals(player, playerStateTracker.getPlayerIdMap().get(PLAYER_ID));
+            assertEquals(PLAYER_ID, playerStateTracker.getSessionPlayerIdMap().get(SESSION_ID));
+            assertEquals(PLAYER_ID, playerStateTracker.getSessionPlayerIdMap().get(newSessionId));
+            assertEquals(Set.of(SESSION_ID, newSessionId), playerStateTracker.getPlayerIdSessionMap().get(PLAYER_ID));
+
             playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, 2, "127.0.0.1", new PlayerSessionState.State.New(
-                            Duration.ofSeconds(1))));
+                    new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS, new PlayerSessionState.State.Gone()));
 
-            Map<Integer, Player> dirtyPlayersAfterBeforeGone = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayersAfterBeforeGone.keySet(), hasSize(1));
+            assertTrue(playerStateTracker.getDirtyPlayerInfoIdMap().containsKey(PLAYER_ID));
 
-            Player dirtyPlayerBeforeGone = dirtyPlayersAfterBeforeGone.get(PLAYER_ID);
-            assertEquals(Player.State.ONLINE, dirtyPlayerBeforeGone.getState());
-            assertEquals(PLAYER_ID, dirtyPlayerBeforeGone.getId());
-            assertThat(playerStateTracker.getSessionExpirationMap().keySet(), hasSize(2));
-            assertThat(playerStateTracker.getPlayerIdMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getSessionPlayerMap().keySet(), hasSize(2));
-            assertThat(playerStateTracker.getPlayerSessionMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getPlayerSessionMap().get(dirtyPlayerBeforeGone), hasSize(2));
-
-            playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Gone()));
-
-            Map<Integer, Player> dirtyPlayersAfterGone = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayersAfterGone.keySet(), hasSize(1));
-
-            Player dirtyPlayerAfterGone = dirtyPlayersAfterGone.get(PLAYER_ID);
-            assertEquals(Player.State.ONLINE, dirtyPlayerAfterGone.getState());
-            assertEquals(PLAYER_ID, dirtyPlayerAfterGone.getId());
-            assertThat(playerStateTracker.getSessionExpirationMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getPlayerIdMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getSessionPlayerMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getPlayerSessionMap().keySet(), hasSize(1));
+            assertTrue(playerStateTracker.getPlayerIdMap().containsKey(PLAYER_ID));
+            assertEquals(expirationTime, playerStateTracker.getSessionExpirationMap().get(newSessionId));
+            assertFalse(playerStateTracker.getSessionExpirationMap().containsKey(SESSION_ID));
+            assertEquals(player, playerStateTracker.getPlayerIdMap().get(PLAYER_ID));
+            assertFalse(playerStateTracker.getSessionPlayerIdMap().containsKey(SESSION_ID));
+            assertEquals(PLAYER_ID, playerStateTracker.getSessionPlayerIdMap().get(newSessionId));
+            assertEquals(Set.of(newSessionId), playerStateTracker.getPlayerIdSessionMap().get(PLAYER_ID));
         }
 
         @Test
         void testUpdatePlayer() {
             playerStateTracker.updatePlayer(PLAYER_ID, _ -> {});
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
-
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
+            assertTrue(playerStateTracker.getDirtyPlayerInfoIdMap().containsKey(PLAYER_ID));
 
             playerStateTracker.sendUpdateForDirtyPlayers();
 
-            verify(outboundLobbyMessageEmitter).send(
-                    OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(Set.of(PLAYER_INFO))));
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(
+                    Set.of(new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, AVATAR_INFO, COUNTRY,
+                                          Map.of(LEADERBOARD, LEADERBOARD_STATS), null)))));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
         }
 
         @Test
         void testUpdateLeaderboards() {
-            String leaderboard = "leaderboard";
+            String leaderboard = LEADERBOARD;
             double deviation = 10d;
             double mean = 100d;
             int totalGames = 2;
 
-            LeaderboardEntity leaderboardEntity = new LeaderboardEntity();
-            leaderboardEntity.setTechnicalName(leaderboard);
-
-            LeaderboardRatingEntity leaderboardRatingEntity = new LeaderboardRatingEntity();
-            leaderboardRatingEntity.setDeviation(deviation);
-            leaderboardRatingEntity.setMean(mean);
-            leaderboardRatingEntity.setPlayerId(PLAYER_ID);
-            leaderboardRatingEntity.setTotalGames(totalGames);
-            leaderboardRatingEntity.setLeaderboard(leaderboardEntity);
             when(playerStateRepository.loadUpdatedLeaderboardRatings(anyCollection(), any())).thenReturn(
-                    List.of(leaderboardRatingEntity));
+                    List.of(new PlayerLeaderboardRating(PLAYER_ID, new LeaderboardRating(leaderboard, totalGames, mean,
+                                                                                         deviation))));
 
             playerStateTracker.updatePlayerLeaderboardRatings();
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
-
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(Set.of(new LeaderboardRating(leaderboard, totalGames, mean, deviation)),
-                         dirtyPlayer.getLeaderboardRatings());
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
+            assertEquals(new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, AVATAR_INFO, COUNTRY,
+                                        Map.of(LEADERBOARD,
+                                               new LeaderboardStats(2, new LeaderboardStats.Rating(100, 10))), null),
+                         playerStateTracker.getDirtyPlayerInfoIdMap().get(PLAYER_ID));
         }
 
         @Test
         void testUpdateLeaderboardsNoUpdates() {
             playerStateTracker.updatePlayerLeaderboardRatings();
 
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
         }
 
         @Test
         void testClearPlayerAvatar() {
             playerStateTracker.handlePlayerAvatar(new PlayerAvatarUpdate(PLAYER_ID, null));
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
-
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
-            assertNull(dirtyPlayer.getAvatar());
+            assertEquals(new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, null, COUNTRY,
+                                        Map.of(LEADERBOARD, LEADERBOARD_STATS), null),
+                         playerStateTracker.getDirtyPlayerInfoIdMap().get(PLAYER_ID));
         }
 
         @Test
         void testUpdatePlayerAvatar() {
             int avatarId = 2;
-            String url = "temp";
-            String description = "other";
-            AvatarEntity avatar = new AvatarEntity();
-            avatar.setId(avatarId);
-            avatar.setUrl(url);
-            avatar.setDescription(description);
-            when(playerStateRepository.findAvatar(avatarId)).thenReturn(Optional.of(avatar));
+            String url = "other";
+            String description = "other avatar";
+            when(playerStateRepository.findAvatar(avatarId)).thenReturn(Optional.of(new Avatar(url, description)));
 
             playerStateTracker.handlePlayerAvatar(new PlayerAvatarUpdate(PLAYER_ID, avatarId));
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
-
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
-            Avatar dirtyAvatar = dirtyPlayer.getAvatar();
-            assertNotNull(dirtyAvatar);
-            assertEquals(avatarId, dirtyAvatar.id());
-            assertEquals(url, dirtyAvatar.url());
-            assertEquals(description, dirtyAvatar.description());
+            assertEquals(new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, new AvatarInfo(url, description), COUNTRY,
+                                        Map.of(LEADERBOARD, LEADERBOARD_STATS), null),
+                         playerStateTracker.getDirtyPlayerInfoIdMap().get(PLAYER_ID));
         }
 
         @Test
         void testExpiredSession() {
-            playerStateTracker.handlePlayerSessionStatus(
-                    new PlayerSessionState(PLAYER_ID, SESSION_ID, "127.0.0.1", new PlayerSessionState.State.Existing(
-                            Duration.ofNanos(-1))));
+            playerStateTracker.handlePlayerSessionStatus(new PlayerSessionState(PLAYER_ID, SESSION_ID, IP_ADDRESS,
+                                                                                new PlayerSessionState.State.Existing(
+                                                                                        Duration.ofNanos(-1))));
 
             playerStateTracker.removeExpiredSessions();
 
-            Map<Integer, Player> dirtyPlayers = playerStateTracker.getDirtyPlayersIdMap();
-            assertThat(dirtyPlayers.keySet(), hasSize(1));
+            assertFalse(playerStateTracker.getPlayerIdMap().containsKey(PLAYER_ID));
 
-            Player dirtyPlayer = dirtyPlayers.get(PLAYER_ID);
-            assertEquals(Player.State.OFFLINE, dirtyPlayer.getState());
-            assertEquals(PLAYER_ID, dirtyPlayer.getId());
+            assertEquals(new PlayerInfo(PLAYER_ID, PLAYER_NAME, CLAN_TAG, AVATAR_INFO, COUNTRY,
+                                        Map.of(LEADERBOARD, LEADERBOARD_STATS), PlayerInfo.State.OFFLINE),
+                         playerStateTracker.getDirtyPlayerInfoIdMap().get(PLAYER_ID));
 
             assertThat(playerStateTracker.getPlayerIdMap().keySet(), hasSize(0));
             assertThat(playerStateTracker.getSessionExpirationMap().keySet(), hasSize(0));
-            assertThat(playerStateTracker.getSessionPlayerMap().keySet(), hasSize(0));
-            assertThat(playerStateTracker.getPlayerSessionMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getSessionPlayerIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getPlayerIdSessionMap().keySet(), hasSize(0));
         }
 
         @Test
         void testNoExpiredSession() {
             playerStateTracker.removeExpiredSessions();
 
-            assertThat(playerStateTracker.getDirtyPlayersIdMap().keySet(), hasSize(0));
+            assertThat(playerStateTracker.getDirtyPlayerInfoIdMap().keySet(), hasSize(0));
             assertThat(playerStateTracker.getSessionExpirationMap().keySet(), hasSize(1));
             assertThat(playerStateTracker.getPlayerIdMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getSessionPlayerMap().keySet(), hasSize(1));
-            assertThat(playerStateTracker.getPlayerSessionMap().keySet(), hasSize(1));
+            assertThat(playerStateTracker.getSessionPlayerIdMap().keySet(), hasSize(1));
+            assertThat(playerStateTracker.getPlayerIdSessionMap().keySet(), hasSize(1));
         }
+    }
 
-        @ApplicationScoped
-        static class TestMeterRegistry extends SimpleMeterRegistry {}
+    @ApplicationScoped
+    static class TestMeterRegistry extends SimpleMeterRegistry {}
+
+    static class ClockProducer {
+        @Produces
+        Clock clock() {
+            return Clock.fixed(INSTANT, ZoneOffset.UTC);
+        }
     }
 }

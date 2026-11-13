@@ -16,27 +16,24 @@ class Player {
     @Getter
     private final int id;
     @Getter
-    @Setter(AccessLevel.PACKAGE)
-    private String username;
+    private final String username;
+    @Getter
+    private final @Nullable String clan;
 
     @Getter
     @Setter(AccessLevel.PACKAGE)
     private String country = "";
-    private @Nullable String clan;
+    @Getter
     private @Nullable Avatar avatar;
 
     private final Map<String, LeaderboardRating> leaderboardRatings = new ConcurrentHashMap<>();
 
-    @Getter
-    private State state = State.ONLINE;
-
-    Player(int id, String username) {
+    Player(int id, String username, @Nullable String clan, @Nullable String avatarUrl,
+           @Nullable String avatarDescription) {
         this.id = id;
         this.username = username;
-    }
-
-    void markOffline() {
-        state = State.OFFLINE;
+        this.clan = clan;
+        this.avatar = avatarUrl != null && avatarDescription != null ? new Avatar(avatarUrl, avatarDescription) : null;
     }
 
     void updateLeaderboardRatings(Collection<LeaderboardRating> leaderboardRatings) {
@@ -49,17 +46,6 @@ class Player {
         return Set.copyOf(leaderboardRatings.values());
     }
 
-    void setClan(String clan) {
-        if (Objects.equals(clan, this.clan)) {
-            return;
-        }
-
-        this.clan = clan;
-    }
-
-    @Nullable String getClan() {
-        return clan;
-    }
 
     void setAvatar(Avatar avatar) {
         if (Objects.equals(avatar, this.avatar)) {
@@ -75,13 +61,5 @@ class Player {
         }
 
         this.avatar = null;
-    }
-
-    @Nullable Avatar getAvatar() {
-        return avatar;
-    }
-
-    enum State {
-        ONLINE, OFFLINE
     }
 }

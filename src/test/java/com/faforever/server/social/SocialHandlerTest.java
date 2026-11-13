@@ -1,6 +1,5 @@
 package com.faforever.server.social;
 
-import com.faforever.server.domain.AvatarEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
 import com.faforever.server.message.client.LobbyMessage;
 import com.faforever.server.message.client.SocialMessage;
@@ -13,13 +12,11 @@ import io.quarkus.test.component.QuarkusComponentTest;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentCaptor.captor;
+import static org.mockito.ArgumentMatchers.assertArg;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,12 +42,10 @@ class SocialHandlerTest {
         int otherId = 2;
         socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SocialAddRequest("", otherId, null)));
 
-        ArgumentCaptor<FriendOrFoeEntity> captor = captor();
-        verify(socialRepository).upsertPlayerRelationship(captor.capture());
-
-        FriendOrFoeEntity upserted = captor.getValue();
-        assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), upserted.getId());
-        assertEquals(FriendOrFoeEntity.Status.FRIEND, upserted.getStatus());
+        verify(socialRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
+            assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), friendOrFoeEntity.getId());
+            assertEquals(FriendOrFoeEntity.Status.FRIEND, friendOrFoeEntity.getStatus());
+        }));
 
         socialHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", otherId, null)));
@@ -63,12 +58,10 @@ class SocialHandlerTest {
         int otherId = 2;
         socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SocialAddRequest("", null, otherId)));
 
-        ArgumentCaptor<FriendOrFoeEntity> captor = captor();
-        verify(socialRepository).upsertPlayerRelationship(captor.capture());
-
-        FriendOrFoeEntity upserted = captor.getValue();
-        assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), upserted.getId());
-        assertEquals(FriendOrFoeEntity.Status.FOE, upserted.getStatus());
+        verify(socialRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
+            assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), friendOrFoeEntity.getId());
+            assertEquals(FriendOrFoeEntity.Status.FOE, friendOrFoeEntity.getStatus());
+        }));
 
         socialHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", null, otherId)));
@@ -78,12 +71,11 @@ class SocialHandlerTest {
 
     @Test
     void testSendAvatars() {
-        AvatarEntity avatarEntity = new AvatarEntity();
-        avatarEntity.setId(5);
-        avatarEntity.setUrl("temp");
-        avatarEntity.setDescription("temporary");
+        String url = "temp";
+        String description = "temporary";
 
-        when(socialRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(List.of(avatarEntity));
+        when(socialRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(
+                List.of(new AvatarInfo(url, description)));
 
         String requestId = "12345";
         socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.ListAvatarsRequest(requestId)));
@@ -91,18 +83,17 @@ class SocialHandlerTest {
         verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
                                                                                  new SocialMessage.AvatarInfoList(
                                                                                          requestId,
-                                                                                         Set.of(new AvatarInfo(
-                                                                                                 avatarEntity.getUrl(),
-                                                                                                 avatarEntity.getDescription())))));
+                                                                                         List.of(new AvatarInfo(url,
+                                                                                                                description)))));
     }
 
     @Test
     void testSelectAvatar() {
         int avatarId = 4;
-        when(socialRepository.updateSelectedAvatar(PLAYER_ID, "new")).thenReturn(avatarId);
+        String url = "new";
+        when(socialRepository.updateSelectedAvatar(PLAYER_ID, url)).thenReturn(avatarId);
 
-        socialHandler.handleSocialRequest(
-                createInboundMessage(new SocialMessage.SelectAvatarRequest("", "new")));
+        socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SelectAvatarRequest("", url)));
 
         verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, avatarId));
     }

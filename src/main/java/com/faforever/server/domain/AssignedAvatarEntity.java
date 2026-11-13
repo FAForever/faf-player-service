@@ -5,16 +5,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
 
 @Getter
-@Setter
 @Entity
 @Table(name = "avatars")
-public class  AssignedAvatarEntity extends AbstractEntity {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@SuppressWarnings("NullAway.Init")
+public class AssignedAvatarEntity extends AbstractEntity {
 
     @Column(name = "idUser")
     private int playerId;

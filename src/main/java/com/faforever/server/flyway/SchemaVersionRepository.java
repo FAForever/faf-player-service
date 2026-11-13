@@ -8,6 +8,6 @@ import java.util.Optional;
 @Repository
 interface SchemaVersionRepository {
 
-    @Query("select s.version from SchemaVersion s where s.version is not null and s.success order by s.installedRank desc limit 1")
+    @Query("select s.version from SchemaVersionEntity s where s.version is not null and s.success order by s.installedRank desc limit 1")
     Optional<String> findMaxVersion();
 }

@@ -9,7 +9,7 @@ import jakarta.transaction.Transactional;
 interface AdminRepository {
 
     @Transactional
-    @Query("select case when count(u) > 0 then false else true end from UserGroupAssignment u join u.userGroup.groupPermissions p where u.userId = :playerId and p.technicalName = :permission")
+    @Query("select case when count(u) > 0 then false else true end from UserGroupAssignmentEntity u join u.userGroup.groupPermissions p where u.userId = :playerId and p.technicalName = :permission")
     boolean playerLacksPermission(@Param("playerId") int playerId, @Param("permission") String permission);
 
 }

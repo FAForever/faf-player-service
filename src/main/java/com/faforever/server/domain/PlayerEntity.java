@@ -6,13 +6,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 @Getter
-@Setter
 @Entity
 @Table(name = "login")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@SuppressWarnings("NullAway.Init")
 public class PlayerEntity extends AbstractEntity {
 
     @Column(name = "login")
@@ -27,9 +30,9 @@ public class PlayerEntity extends AbstractEntity {
             joinColumns = @JoinColumn(name = "player_id"),
             inverseJoinColumns = @JoinColumn(name = "clan_id")
     )
-    private ClanEntity clan;
+    private @Nullable ClanEntity clan;
 
     @ManyToOne
     @JoinColumn(name = "avatar_id")
-    private AvatarEntity selectedAvatar;
+    private @Nullable AvatarEntity selectedAvatar;
 }

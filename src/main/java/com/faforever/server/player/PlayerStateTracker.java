@@ -1,10 +1,6 @@
 package com.faforever.server.player;
 
-import com.faforever.server.domain.AvatarEntity;
-import com.faforever.server.domain.ClanEntity;
 import com.faforever.server.domain.FriendOrFoeEntity;
-import com.faforever.server.domain.LeaderboardRatingEntity;
-import com.faforever.server.domain.PlayerEntity;
 import com.faforever.server.geoip.GeoIpService;
 import com.faforever.server.interceptor.cdi.MDCInterceptor;
 import com.faforever.server.interceptor.cdi.MDCPopulated;
@@ -35,9 +31,10 @@ import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.slf4j.MDC;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -56,6 +53,8 @@ class PlayerStateTracker {
     private final Emitter<Map<String, String>> playerConnectionsRequestEmitter;
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
 
+    private final Clock clock;
+
     private final PlayerStateRepository playerStateRepository;
 
     private final String defaultChannelName;
@@ -63,14 +62,14 @@ class PlayerStateTracker {
     @Getter(AccessLevel.PACKAGE)
     private final Map<Integer, Player> playerIdMap;
     @Getter(AccessLevel.PACKAGE)
-    private final Map<Integer, Player> dirtyPlayersIdMap;
+    private final Map<Integer, PlayerInfo> dirtyPlayerInfoIdMap;
 
     @Getter(AccessLevel.PACKAGE)
-    private final Map<Long, Player> sessionPlayerMap;
+    private final Map<Long, Integer> sessionPlayerIdMap;
     @Getter(AccessLevel.PACKAGE)
     private final Map<Long, Instant> sessionExpirationMap;
     @Getter(AccessLevel.PACKAGE)
-    private final Map<Player, Set<Long>> playerSessionMap = new ConcurrentHashMap<>();
+    private final Map<Integer, Set<Long>> playerIdSessionMap = new ConcurrentHashMap<>();
 
     private Instant lastRatingUpdateTime = Instant.now();
 
@@ -78,26 +77,28 @@ class PlayerStateTracker {
                        @Channel("player-session-request") Emitter<Map<String, String>> playerConnectionsRequestEmitter,
                        @Channel(
                                "lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
-                       PlayerStateRepository playerStateRepository, @ConfigProperty(name = "faf.default-channel-name",
-                                                                                    defaultValue = "#aeolus") String defaultChannelName,
+                       Clock clock, PlayerStateRepository playerStateRepository,
+                       @ConfigProperty(name = "faf.default-channel-name",
+                                       defaultValue = "#aeolus") String defaultChannelName,
                        MeterRegistry meterRegistry) {
         this.geoIpService = geoIpService;
         this.playerConnectionsRequestEmitter = playerConnectionsRequestEmitter;
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
+        this.clock = clock;
         this.playerStateRepository = playerStateRepository;
         this.defaultChannelName = defaultChannelName;
         this.playerIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "online"),
                                                       new ConcurrentHashMap<>());
-        this.dirtyPlayersIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "dirty"),
-                                                            new ConcurrentHashMap<>());
-        this.sessionPlayerMap = meterRegistry.gaugeMapSize("faf.sessions", Tags.of("state", "online"),
-                                                           new ConcurrentHashMap<>());
+        this.dirtyPlayerInfoIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "dirty"),
+                                                               new ConcurrentHashMap<>());
+        this.sessionPlayerIdMap = meterRegistry.gaugeMapSize("faf.sessions", Tags.of("state", "online"),
+                                                             new ConcurrentHashMap<>());
         this.sessionExpirationMap = Objects.requireNonNull(
                 meterRegistry.gauge("faf.sessions", Tags.of("state", "expired"), new ConcurrentHashMap<>(),
                                     sessionsExpiredMap -> sessionsExpiredMap.values()
                                                                             .stream()
                                                                             .filter(instant -> instant.isAfter(
-                                                                                    Instant.now()))
+                                                                                    clock.instant()))
                                                                             .count()));
     }
 
@@ -113,73 +114,61 @@ class PlayerStateTracker {
                                              resolver = PlayerSessionStateResolver.class) PlayerSessionState playerSessionStatus) {
         switch (playerSessionStatus.state()) {
             case PlayerSessionState.State.New(Duration secondsToExpiry) -> {
-                registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
-                                      playerSessionStatus.ipAddress(), secondsToExpiry);
+                Player player = registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
+                                                      playerSessionStatus.ipAddress(), secondsToExpiry);
 
-                playerStateRepository.updatePlayerIpAddress(playerSessionStatus.playerId(),
-                                                            playerSessionStatus.ipAddress());
-                sendWelcomeMessages(playerSessionStatus.sessionId());
+                sendWelcomeMessages(playerSessionStatus.sessionId(), player);
                 LOG.info("Registered new session");
             }
 
             case PlayerSessionState.State.Existing(Duration secondsToExpiry) ->
                     registerPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId(),
                                           playerSessionStatus.ipAddress(), secondsToExpiry);
-            case PlayerSessionState.State.Gone() ->
-                    unregisterPlayerSession(playerSessionStatus.sessionId(), playerSessionStatus.playerId());
+            case PlayerSessionState.State.Gone() -> unregisterSession(playerSessionStatus.sessionId());
         }
     }
 
-    private void registerPlayerSession(long sessionId, int playerId, String ipAddress, Duration secondsToExpiry) {
+    private Player registerPlayerSession(long sessionId, int playerId, String ipAddress, Duration secondsToExpiry) {
         LOG.debug("Registering session");
-        Player player = playerIdMap.computeIfAbsent(playerId, key -> initializePlayer(key, ipAddress));
-        Player existingPlayer = sessionPlayerMap.putIfAbsent(sessionId, player);
-        if (existingPlayer != null && existingPlayer != player) {
+        Integer existingPlayerId = sessionPlayerIdMap.putIfAbsent(sessionId, playerId);
+        if (existingPlayerId != null && existingPlayerId != playerId) {
             throw new IllegalStateException(
-                    "Session already has an existing player of id %d".formatted(existingPlayer.getId()));
+                    "Session already has an existing player of id %d".formatted(existingPlayerId));
         }
-        playerSessionMap.compute(player, (_, sessions) -> {
-            if (sessions == null) {
-                sessions = ConcurrentHashMap.newKeySet();
-            }
-            sessions.add(sessionId);
-            return sessions;
-        });
+        sessionExpirationMap.put(sessionId, clock.instant().plus(secondsToExpiry));
 
-        sessionExpirationMap.put(sessionId, Instant.now().plus(secondsToExpiry));
+        return playerIdMap.compute(playerId, (key, player) -> {
+            if (player == null) {
+                player = initializePlayer(key, ipAddress);
+            }
+
+            playerIdSessionMap.compute(playerId, (_, sessions) -> {
+                if (sessions == null) {
+                    sessions = ConcurrentHashMap.newKeySet();
+                }
+                sessions.add(sessionId);
+                return sessions;
+            });
+
+            return player;
+        });
     }
 
     private Player initializePlayer(int playerId, String ipAddress) {
-        PlayerEntity playerEntity = playerStateRepository.loadPlayer(playerId)
-                                                         .orElseThrow(() -> new IllegalStateException(
-                                                                 "No user with id %d".formatted(playerId)));
+        Player player = playerStateRepository.loadPlayer(playerId)
+                                             .orElseThrow(() -> new IllegalStateException(
+                                                     "No user with id %d".formatted(playerId)));
 
-        Set<LeaderboardRating> leaderboardRatings = playerStateRepository.loadPlayerRatings(playerEntity.getId())
-                                                                         .stream()
-                                                                         .map(this::toLeaderboardRating)
-                                                                         .collect(Collectors.toSet());
+        playerStateRepository.updatePlayerIpAddress(playerId, ipAddress);
 
-        Player loadedPlayer = new Player(playerEntity.getId(), playerEntity.getName());
-        AvatarEntity avatarEntity = playerEntity.getSelectedAvatar();
-        if (avatarEntity != null) {
-            loadedPlayer.setAvatar(
-                    new Avatar(avatarEntity.getId(), avatarEntity.getUrl(), avatarEntity.getDescription()));
-        }
-        ClanEntity clan = playerEntity.getClan();
-        if (clan != null) {
-            loadedPlayer.setClan(clan.getTag());
-        }
-        loadedPlayer.updateLeaderboardRatings(leaderboardRatings);
-        loadedPlayer.setCountry(geoIpService.findCountry(ipAddress));
-        return loadedPlayer;
+        Collection<LeaderboardRating> leaderboardRatings = playerStateRepository.loadPlayerRatings(playerId);
+
+        player.updateLeaderboardRatings(leaderboardRatings);
+        player.setCountry(geoIpService.findCountry(ipAddress));
+        return player;
     }
 
-    private void sendWelcomeMessages(long sessionId) {
-        Player player = sessionPlayerMap.get(sessionId);
-        if (player == null) {
-            throw new IllegalStateException("No player associated with session");
-        }
-
+    private void sendWelcomeMessages(long sessionId, Player player) {
         Set<String> channels = new HashSet<>();
         channels.add(defaultChannelName);
         if (player.getClan() != null) {
@@ -194,16 +183,15 @@ class PlayerStateTracker {
                                                                                           .stream()
                                                                                           .collect(
                                                                                                   Collectors.groupingBy(
-                                                                                                          FriendOrFoeEntity::getStatus,
+                                                                                                          FriendOrFoe::status,
                                                                                                           Collectors.mapping(
-                                                                                                                  friendOrFoeEntity -> friendOrFoeEntity.getId()
-                                                                                                                                                        .subjectId(),
+                                                                                                                  FriendOrFoe::subjectId,
                                                                                                                   Collectors.toSet())));
 
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new ConnectionMessage.LoginSuccessResponse(
                                                                                  toPlayerInfo(player),
-                                                                                 OffsetDateTime.now())));
+                                                                                 clock.instant())));
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId,
                                                                          new SocialMessage.SocialInfo(channels,
                                                                                                       friendsAndFoes.getOrDefault(
@@ -215,19 +203,20 @@ class PlayerStateTracker {
         outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(sessionId, new SocialMessage.PlayerInfoList(
                 playerIdMap.values().stream().map(this::toPlayerInfo).collect(Collectors.toSet()))));
 
-        dirtyPlayersIdMap.put(player.getId(), player);
+        markDirty(player);
     }
 
-    private void unregisterPlayerSession(long sessionId, int playerId) {
+    private void unregisterSession(long sessionId) {
         LOG.info("Removing session");
-        playerIdMap.computeIfPresent(playerId, (_, player) -> {
-            sessionExpirationMap.remove(sessionId);
+        sessionExpirationMap.remove(sessionId);
+        Integer playerId = sessionPlayerIdMap.remove(sessionId);
+        if (playerId == null) {
+            LOG.warn("No player associated with session");
+            return;
+        }
 
-            if (!sessionPlayerMap.remove(sessionId, player)) {
-                return player;
-            }
-
-            Set<Long> remainingSessions = playerSessionMap.computeIfPresent(player, (_, sessions) -> {
+        playerIdMap.computeIfPresent(playerId, (key, player) -> {
+            Set<Long> remainingSessions = playerIdSessionMap.computeIfPresent(key, (_, sessions) -> {
                 if (sessions.remove(sessionId) && sessions.isEmpty()) {
                     return null;
                 } else {
@@ -236,13 +225,13 @@ class PlayerStateTracker {
             });
 
             if (remainingSessions == null) {
-                player.markOffline();
-                dirtyPlayersIdMap.put(player.getId(), player);
+                markDirty(player);
                 return null;
             } else {
                 return player;
             }
         });
+
     }
 
     @Incoming("avatar-updates")
@@ -254,10 +243,7 @@ class PlayerStateTracker {
             if (playerAvatarUpdate.avatarId() == null) {
                 player.clearAvatar();
             } else {
-                player.setAvatar(playerStateRepository.findAvatar(playerAvatarUpdate.avatarId())
-                                                      .map(entity -> new Avatar(entity.getId(), entity.getUrl(),
-                                                                                entity.getDescription()))
-                                                      .orElseThrow());
+                player.setAvatar(playerStateRepository.findAvatar(playerAvatarUpdate.avatarId()).orElseThrow());
             }
         });
     }
@@ -266,7 +252,7 @@ class PlayerStateTracker {
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Timed(value = "faf.player.session.remove", histogram = true)
     void removeExpiredSessions() {
-        Instant evaluationTime = Instant.now();
+        Instant evaluationTime = clock.instant();
 
         Set<Long> expiredSessionIds = sessionExpirationMap.entrySet()
                                                           .stream()
@@ -280,17 +266,16 @@ class PlayerStateTracker {
 
         LOG.info("Removing {} expired sessions", expiredSessionIds.size());
         expiredSessionIds.forEach(expiredSessionId -> {
-            Player player = sessionPlayerMap.get(expiredSessionId);
-            if (player != null) {
-                MDC.put(MDCInterceptor.SESSION_ID, String.valueOf(expiredSessionId));
-                MDC.put(MDCInterceptor.PLAYER_ID, String.valueOf(player.getId()));
-
-                unregisterPlayerSession(expiredSessionId, player.getId());
-
-                MDC.remove(MDCInterceptor.SESSION_ID);
-                MDC.remove(MDCInterceptor.PLAYER_ID);
+            MDC.put(MDCInterceptor.SESSION_ID, String.valueOf(expiredSessionId));
+            Integer playerId = sessionPlayerIdMap.get(expiredSessionId);
+            if (playerId != null) {
+                MDC.put(MDCInterceptor.PLAYER_ID, String.valueOf(playerId));
             }
-            sessionExpirationMap.remove(expiredSessionId);
+
+            unregisterSession(expiredSessionId);
+
+            MDC.remove(MDCInterceptor.SESSION_ID);
+            MDC.remove(MDCInterceptor.PLAYER_ID);
         });
     }
 
@@ -299,7 +284,7 @@ class PlayerStateTracker {
     @Timed(value = "faf.player.leaderboard.update", histogram = true)
     void updatePlayerLeaderboardRatings() {
         Instant currentRatingUpdateTime = lastRatingUpdateTime;
-        lastRatingUpdateTime = Instant.now();
+        lastRatingUpdateTime = clock.instant();
         Set<Integer> playerIds = Set.copyOf(playerIdMap.keySet());
         if (playerIds.isEmpty()) {
             LOG.debug("No players connected");
@@ -310,9 +295,9 @@ class PlayerStateTracker {
                                                                                               playerIds, currentRatingUpdateTime)
                                                                                       .stream()
                                                                                       .collect(Collectors.groupingBy(
-                                                                                              LeaderboardRatingEntity::getPlayerId,
+                                                                                              PlayerLeaderboardRating::playerId,
                                                                                               Collectors.mapping(
-                                                                                                      this::toLeaderboardRating,
+                                                                                                      PlayerLeaderboardRating::leaderboardRating,
                                                                                                       Collectors.toSet())));
 
         if (playerIdRatingMap.isEmpty()) {
@@ -331,34 +316,28 @@ class PlayerStateTracker {
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Timed(value = "faf.player.dirty.update", histogram = true)
     void sendUpdateForDirtyPlayers() {
-        Map<Integer, Player> frozenDirtyPlayers = Map.copyOf(dirtyPlayersIdMap);
+        Map<Integer, PlayerInfo> frozenDirtyPlayers = Map.copyOf(dirtyPlayerInfoIdMap);
         if (frozenDirtyPlayers.isEmpty()) {
             return;
         }
         LOG.debug("Sending player info for {} players", frozenDirtyPlayers.size());
 
-        Set<PlayerInfo> playerInfos = frozenDirtyPlayers.values()
-                                                        .stream()
-                                                        .map(this::toPlayerInfo)
-                                                        .collect(Collectors.toSet());
-        outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(playerInfos)));
+        outboundLobbyMessageEmitter.send(
+                OutboundLobbyMessage.forAll(new SocialMessage.PlayerInfoList(frozenDirtyPlayers.values())));
 
-        frozenDirtyPlayers.forEach(dirtyPlayersIdMap::remove);
+        frozenDirtyPlayers.forEach(dirtyPlayerInfoIdMap::remove);
     }
 
     void updatePlayer(int playerId, Consumer<Player> updater) {
-        Player player = playerIdMap.get(playerId);
-        if (player == null) {
-            return;
-        }
-        updater.accept(player);
-        dirtyPlayersIdMap.put(playerId, player);
+        playerIdMap.computeIfPresent(playerId, (_, player) -> {
+            updater.accept(player);
+            markDirty(player);
+            return player;
+        });
     }
 
-    private LeaderboardRating toLeaderboardRating(LeaderboardRatingEntity leaderboardRatingEntity) {
-        return new LeaderboardRating(leaderboardRatingEntity.getLeaderboard().getTechnicalName(),
-                                     leaderboardRatingEntity.getTotalGames(), leaderboardRatingEntity.getMean(),
-                                     leaderboardRatingEntity.getDeviation());
+    private void markDirty(Player player) {
+        dirtyPlayerInfoIdMap.put(player.getId(), toPlayerInfo(player));
     }
 
     private PlayerInfo toPlayerInfo(Player player) {
@@ -374,10 +353,7 @@ class PlayerStateTracker {
                                                                                       leaderboardRating.totalGames(),
                                                                                       rating);
                                                                           }));
-        PlayerInfo.State state = switch (player.getState()) {
-            case ONLINE -> null;
-            case OFFLINE -> PlayerInfo.State.OFFLINE;
-        };
+        PlayerInfo.State state = playerIdSessionMap.containsKey(player.getId()) ? null : PlayerInfo.State.OFFLINE;
         String clan = player.getClan();
         Avatar playerAvatar = player.getAvatar();
         AvatarInfo avatar = playerAvatar == null ?

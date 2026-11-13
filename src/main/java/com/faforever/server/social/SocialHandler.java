@@ -18,8 +18,7 @@ import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.List;
 
 @Slf4j
 @ApplicationScoped
@@ -49,11 +48,7 @@ class SocialHandler {
         switch (request.message()) {
             case SocialMessage.ListAvatarsRequest(String requestId) -> {
                 LOG.info("Listing avatars");
-                Set<AvatarInfo> avatars = socialRepository.findAssignedAvatarsByPlayer(playerId)
-                                                                  .stream()
-                                                          .map(avatar -> new AvatarInfo(avatar.getUrl(),
-                                                                                        avatar.getDescription()))
-                                                                  .collect(Collectors.toSet());
+                List<AvatarInfo> avatars = socialRepository.findAssignedAvatarsByPlayer(playerId);
                 SocialMessage.AvatarInfoList avatarInfoList = new SocialMessage.AvatarInfoList(requestId, avatars);
                 outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(request.sessionId(), avatarInfoList));
             }

@@ -5,13 +5,15 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 @Getter
-@Setter
 @Entity
 @Table(name = "leaderboard_rating")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@SuppressWarnings("NullAway.Init")
 public class LeaderboardRatingEntity extends TimeTrackedEntity {
 
     @Column(name = "login_id")

@@ -13,6 +13,7 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -57,7 +58,7 @@ public class ClientMessageSerializationTest {
                 Map.of("global", new LeaderboardStats(5, new LeaderboardStats.Rating(1500.0, 50.0))),
                 PlayerInfo.State.OFFLINE
         );
-        OffsetDateTime now = OffsetDateTime.of(2026, 10, 24, 12, 0, 0, 0, ZoneOffset.UTC);
+        Instant now = OffsetDateTime.of(2026, 10, 24, 12, 0, 0, 0, ZoneOffset.UTC).toInstant();
         ConnectionMessage.LoginSuccessResponse message = new ConnectionMessage.LoginSuccessResponse(playerInfo, now);
 
         JSONAssert.assertEquals("""
