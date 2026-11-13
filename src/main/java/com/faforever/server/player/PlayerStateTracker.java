@@ -207,7 +207,7 @@ class PlayerStateTracker {
     private void unregisterSession(long sessionId) {
         LOG.info("Removing session");
         sessionExpirationMap.remove(sessionId);
-        Player player = sessionPlayerMap.get(sessionId);
+        Player player = sessionPlayerMap.remove(sessionId);
         if (player == null) {
             LOG.warn("No player associated with session");
             return;
