@@ -16,8 +16,8 @@ interface PlayerStateRepository {
     @Query("""
            select new Player(p.id, p.name, c.tag, a.url, a.description)
            from PlayerEntity p
-           left join AvatarEntity a on a = p.selectedAvatar
-           left join ClanEntity c on c = p.clan
+           left join p.selectedAvatar a
+           left join p.clan c
            where p.id = :playerId
            """)
     Optional<Player> loadPlayer(int playerId);
