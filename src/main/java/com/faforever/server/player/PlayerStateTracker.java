@@ -139,6 +139,10 @@ class PlayerStateTracker {
         sessionExpirationMap.put(sessionId, clock.instant().plus(secondsToExpiry));
 
         return playerIdMap.compute(playerId, (key, player) -> {
+            if (player == null) {
+                player = initializePlayer(key, ipAddress);
+            }
+
             playerIdSessionMap.compute(playerId, (_, sessions) -> {
                 if (sessions == null) {
                     sessions = ConcurrentHashMap.newKeySet();
@@ -147,7 +151,7 @@ class PlayerStateTracker {
                 return sessions;
             });
 
-            return player != null ? player : initializePlayer(key, ipAddress);
+            return player;
         });
     }
 
