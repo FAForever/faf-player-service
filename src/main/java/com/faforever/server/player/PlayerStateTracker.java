@@ -93,13 +93,14 @@ class PlayerStateTracker {
                                                                new ConcurrentHashMap<>());
         this.sessionPlayerIdMap = meterRegistry.gaugeMapSize("faf.sessions", Tags.of("state", "online"),
                                                              new ConcurrentHashMap<>());
-        this.sessionExpirationMap = Objects.requireNonNull(
-                meterRegistry.gauge("faf.sessions", Tags.of("state", "expired"), new ConcurrentHashMap<>(),
-                                    sessionsExpiredMap -> sessionsExpiredMap.values()
-                                                                            .stream()
-                                                                            .filter(instant -> instant.isAfter(
-                                                                                    clock.instant()))
-                                                                            .count()));
+        this.sessionExpirationMap =
+                Objects.requireNonNull(
+                        meterRegistry.gauge("faf.sessions", Tags.of("state", "expired"), new ConcurrentHashMap<>(),
+                                            sessionsExpiredMap -> sessionsExpiredMap.values()
+                                                                                    .stream()
+                                                                                    .filter(instant -> instant.isAfter(
+                                                                                            clock.instant()))
+                                                                                    .count()));
     }
 
     @PostConstruct
