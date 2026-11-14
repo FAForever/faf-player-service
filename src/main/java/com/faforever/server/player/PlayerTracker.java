@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @ApplicationScoped
 @RunOnVirtualThread
-class PlayerStateTracker {
+class PlayerTracker {
 
     private final GeoIpService geoIpService;
 
@@ -55,7 +55,7 @@ class PlayerStateTracker {
 
     private final Clock clock;
 
-    private final PlayerStateRepository playerStateRepository;
+    private final PlayerTrackerRepository playerTrackerRepository;
 
     private final String defaultChannelName;
 
@@ -73,19 +73,19 @@ class PlayerStateTracker {
 
     private Instant lastRatingUpdateTime = Instant.now();
 
-    PlayerStateTracker(GeoIpService geoIpService,
-                       @Channel("player-session-request") Emitter<Map<String, String>> playerConnectionsRequestEmitter,
-                       @Channel(
+    PlayerTracker(GeoIpService geoIpService,
+                  @Channel("player-session-request") Emitter<Map<String, String>> playerConnectionsRequestEmitter,
+                  @Channel(
                                "lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
-                       Clock clock, PlayerStateRepository playerStateRepository,
-                       @ConfigProperty(name = "faf.default-channel-name",
+                  Clock clock, PlayerTrackerRepository playerTrackerRepository,
+                  @ConfigProperty(name = "faf.default-channel-name",
                                        defaultValue = "#aeolus") String defaultChannelName,
-                       MeterRegistry meterRegistry) {
+                  MeterRegistry meterRegistry) {
         this.geoIpService = geoIpService;
         this.playerConnectionsRequestEmitter = playerConnectionsRequestEmitter;
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
         this.clock = clock;
-        this.playerStateRepository = playerStateRepository;
+        this.playerTrackerRepository = playerTrackerRepository;
         this.defaultChannelName = defaultChannelName;
         this.playerIdMap = meterRegistry.gaugeMapSize("faf.players", Tags.of("state", "online"),
                                                       new ConcurrentHashMap<>());
@@ -155,13 +155,13 @@ class PlayerStateTracker {
     }
 
     private Player initializePlayer(int playerId, String ipAddress) {
-        Player player = playerStateRepository.loadPlayer(playerId)
-                                             .orElseThrow(() -> new IllegalStateException(
+        Player player = playerTrackerRepository.loadPlayer(playerId)
+                                               .orElseThrow(() -> new IllegalStateException(
                                                      "No user with id %d".formatted(playerId)));
 
-        playerStateRepository.updatePlayerIpAddress(playerId, ipAddress);
+        playerTrackerRepository.updatePlayerIpAddress(playerId, ipAddress);
 
-        Collection<LeaderboardRating> leaderboardRatings = playerStateRepository.loadPlayerRatings(playerId);
+        Collection<LeaderboardRating> leaderboardRatings = playerTrackerRepository.loadPlayerRatings(playerId);
 
         player.updateLeaderboardRatings(leaderboardRatings);
         player.setCountry(geoIpService.findCountry(ipAddress));
@@ -174,14 +174,14 @@ class PlayerStateTracker {
         if (player.getClan() != null) {
             channels.add("#%s_clan".formatted(player.getClan()));
         }
-        if (playerStateRepository.isPlayerModerator(player.getId())) {
+        if (playerTrackerRepository.isPlayerModerator(player.getId())) {
             channels.add("#moderators");
         }
 
-        Map<FriendOrFoeEntity.Status, Set<Integer>> friendsAndFoes = playerStateRepository.loadFriendsAndFoes(
+        Map<FriendOrFoeEntity.Status, Set<Integer>> friendsAndFoes = playerTrackerRepository.loadFriendsAndFoes(
                                                                                                   player.getId())
-                                                                                          .stream()
-                                                                                          .collect(
+                                                                                            .stream()
+                                                                                            .collect(
                                                                                                   Collectors.groupingBy(
                                                                                                           FriendOrFoe::status,
                                                                                                           Collectors.mapping(
@@ -243,7 +243,7 @@ class PlayerStateTracker {
             if (playerAvatarUpdate.avatarId() == null) {
                 player.clearAvatar();
             } else {
-                player.setAvatar(playerStateRepository.findAvatar(playerAvatarUpdate.avatarId()).orElseThrow());
+                player.setAvatar(playerTrackerRepository.findAvatar(playerAvatarUpdate.avatarId()).orElseThrow());
             }
         });
     }
@@ -291,10 +291,10 @@ class PlayerStateTracker {
             return;
         }
 
-        Map<Integer, Set<LeaderboardRating>> playerIdRatingMap = playerStateRepository.loadUpdatedLeaderboardRatings(
+        Map<Integer, Set<LeaderboardRating>> playerIdRatingMap = playerTrackerRepository.loadUpdatedLeaderboardRatings(
                                                                                               playerIds, currentRatingUpdateTime)
-                                                                                      .stream()
-                                                                                      .collect(Collectors.groupingBy(
+                                                                                        .stream()
+                                                                                        .collect(Collectors.groupingBy(
                                                                                               PlayerLeaderboardRating::playerId,
                                                                                               Collectors.mapping(
                                                                                                       PlayerLeaderboardRating::leaderboardRating,

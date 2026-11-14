@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Repository
 @Transactional
-interface PlayerStateRepository {
+interface PlayerTrackerRepository {
 
     @Query("""
            select new Player(p.id, p.name, c.tag, a.url, a.description)

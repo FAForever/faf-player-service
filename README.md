@@ -66,7 +66,7 @@ The player service operates as an event-driven service powered by **Quarkus** an
 |                               FAF Player Service                                 |
 |                                                                                  |
 |   +-----------------------+     Updates     +--------------------------------+   |
-|   |  PlayerSessionState   | --------------> |       PlayerStateTracker       |   |
+|   |  PlayerSessionState   | --------------> |         PlayerTracker          |   |
 |   |  (new/existing/gone)  |                 |  - playerIdMap                 |   |
 |   +-----------------------+                 |  - sessionPlayerIdMap          |   |
 |                                             |  - playerIdSessionMap          |   |
@@ -90,7 +90,7 @@ The player service operates as an event-driven service powered by **Quarkus** an
 
 ### Player State Lifecycle
 
-The `PlayerStateTracker` maintains concurrent in-memory maps of online players and active sessions:
+The `PlayerTracker` maintains concurrent in-memory maps of online players and active sessions:
 
 - **`playerIdMap`**: Maps unique player IDs to online `Player` domain objects.
 - **`sessionPlayerIdMap`**: Maps active connection session IDs to their player ID.
@@ -119,7 +119,7 @@ If the file is not present, all players will have an empty country.
 
 ### Session Synchronization
 
-- **Startup Recovery**: On service startup, `PlayerStateTracker` sends a session inquiry over `player-session-request`
+- **Startup Recovery**: On service startup, `PlayerTracker` sends a session inquiry over `player-session-request`
   (`lobby-session-request` exchange), with `reply-to` set to this instance's `player-session-state` queue, so the lobby
   gateway reports all currently active client sessions.
 - **Session Registration**: Listens on `player-session-state` (`lobby-session-state` exchange) for:
