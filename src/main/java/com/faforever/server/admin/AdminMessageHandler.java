@@ -18,13 +18,13 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 @Slf4j
 @ApplicationScoped
 @RunOnVirtualThread
-class AdminHandler {
+class AdminMessageHandler {
 
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
 
     private final AdminRepository adminRepository;
 
-    AdminHandler(
+    AdminMessageHandler(
             @Channel("lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
             AdminRepository adminRepository) {
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;

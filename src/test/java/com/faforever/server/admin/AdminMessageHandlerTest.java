@@ -15,13 +15,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @QuarkusComponentTest
-class AdminHandlerTest {
+class AdminMessageHandlerTest {
 
     private static final int PLAYER_ID = 1;
     private static final long SESSION_ID = 0;
 
     @Inject
-    AdminHandler socialService;
+    AdminMessageHandler socialService;
 
     @InjectMock
     private Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;

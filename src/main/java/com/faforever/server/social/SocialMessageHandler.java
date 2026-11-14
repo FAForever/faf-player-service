@@ -23,14 +23,14 @@ import java.util.List;
 @Slf4j
 @ApplicationScoped
 @RunOnVirtualThread
-class SocialHandler {
+class SocialMessageHandler {
 
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
     private final Emitter<PlayerAvatarUpdate> outboundAvatarUpdateEmitter;
 
     private final SocialRepository socialRepository;
 
-    SocialHandler(
+    SocialMessageHandler(
             @Channel("lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
             @Channel("avatar-updates-out") Emitter<PlayerAvatarUpdate> outboundAvatarUpdateEmitter,
             SocialRepository socialRepository) {
