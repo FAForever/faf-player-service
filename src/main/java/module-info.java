@@ -29,6 +29,7 @@ module com.faforever.server.player {
     requires com.maxmind.geoip2;
     requires com.maxmind.db;
     requires jakarta.data;
+    requires quarkus.jackson;
 
     requires static lombok;
 }

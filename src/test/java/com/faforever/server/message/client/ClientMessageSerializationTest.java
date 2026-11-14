@@ -1,15 +1,17 @@
 package com.faforever.server.message.client;
 
+import com.faforever.server.jackson.JacksonCustomizer;
 import com.faforever.server.message.client.dto.AvatarInfo;
 import com.faforever.server.message.client.dto.LeaderboardStats;
 import com.faforever.server.message.client.dto.PlayerInfo;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
-import org.junit.jupiter.api.BeforeEach;
+import io.quarkus.jackson.runtime.JsonMapperProducer;
+import io.quarkus.test.component.QuarkusComponentTest;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
 import org.skyscreamer.jsonassert.JSONCompareMode;
-import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
@@ -22,16 +24,11 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@QuarkusComponentTest({JacksonCustomizer.class, JsonMapperProducer.class})
 public class ClientMessageSerializationTest {
 
-    private JsonMapper jsonMapper;
-
-    @BeforeEach
-    void setup() {
-        jsonMapper = JsonMapper.builder()
-                               .propertyNamingStrategy(new PropertyNamingStrategies.SnakeCaseStrategy())
-                               .build();
-    }
+    @Inject
+    JsonMapper jsonMapper;
 
     @Test
     void testNoticeInfo() throws Exception {
