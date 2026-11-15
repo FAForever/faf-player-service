@@ -23,20 +23,20 @@ import java.util.List;
 @Slf4j
 @ApplicationScoped
 @RunOnVirtualThread
-class SocialHandler {
+class SocialMessageHandler {
 
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
     private final Emitter<PlayerAvatarUpdate> outboundAvatarUpdateEmitter;
 
-    private final SocialRepository socialRepository;
+    private final SocialMessageHandlerRepository socialMessageHandlerRepository;
 
-    SocialHandler(
+    SocialMessageHandler(
             @Channel("lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
             @Channel("avatar-updates-out") Emitter<PlayerAvatarUpdate> outboundAvatarUpdateEmitter,
-            SocialRepository socialRepository) {
+            SocialMessageHandlerRepository socialMessageHandlerRepository) {
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
         this.outboundAvatarUpdateEmitter = outboundAvatarUpdateEmitter;
-        this.socialRepository = socialRepository;
+        this.socialMessageHandlerRepository = socialMessageHandlerRepository;
     }
 
     @Incoming("social-inbound")
@@ -48,18 +48,18 @@ class SocialHandler {
         switch (request.message()) {
             case SocialMessage.ListAvatarsRequest(String requestId) -> {
                 LOG.info("Listing avatars");
-                List<AvatarInfo> avatars = socialRepository.findAssignedAvatarsByPlayer(playerId);
+                List<AvatarInfo> avatars = socialMessageHandlerRepository.findAssignedAvatarsByPlayer(playerId);
                 SocialMessage.AvatarInfoList avatarInfoList = new SocialMessage.AvatarInfoList(requestId, avatars);
                 outboundLobbyMessageEmitter.send(OutboundLobbyMessage.forSession(request.sessionId(), avatarInfoList));
             }
             case SocialMessage.SelectAvatarRequest(_, String avatarUrl) -> {
                 LOG.info("Selecting avatar {}", avatarUrl);
-                int avatarId = socialRepository.updateSelectedAvatar(playerId, avatarUrl);
+                int avatarId = socialMessageHandlerRepository.updateSelectedAvatar(playerId, avatarUrl);
                 outboundAvatarUpdateEmitter.send(new PlayerAvatarUpdate(playerId, avatarId));
             }
             case SocialMessage.RemoveAvatarRequest _ -> {
                 LOG.info("Removing avatar");
-                socialRepository.removeSelectedAvatar(playerId);
+                socialMessageHandlerRepository.removeSelectedAvatar(playerId);
                 outboundAvatarUpdateEmitter.send(new PlayerAvatarUpdate(playerId, null));
             }
             case SocialMessage.SocialAddRequest(_, Integer friendId, Integer foeId) -> {
@@ -86,11 +86,11 @@ class SocialHandler {
     }
 
     private void addSocialRelationship(int playerId, int targetId, FriendOrFoeEntity.Status status) {
-        socialRepository.upsertPlayerRelationship(
+        socialMessageHandlerRepository.upsertPlayerRelationship(
                 new FriendOrFoeEntity(new FriendOrFoeEntity.Id(playerId, targetId), status));
     }
 
     private void removeSocialRelationship(int playerId, int targetId) {
-        socialRepository.deletePlayerRelationship(new FriendOrFoeEntity.Id(playerId, targetId));
+        socialMessageHandlerRepository.deletePlayerRelationship(new FriendOrFoeEntity.Id(playerId, targetId));
     }
 }

@@ -21,13 +21,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @QuarkusComponentTest
-class SocialHandlerTest {
+class SocialMessageHandlerTest {
 
     private static final int PLAYER_ID = 1;
     private static final long SESSION_ID = 0;
 
     @Inject
-    SocialHandler socialHandler;
+    SocialMessageHandler socialMessageHandler;
 
     @InjectMock
     private Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
@@ -35,38 +35,40 @@ class SocialHandlerTest {
     private Emitter<PlayerAvatarUpdate> outboundAvatarUpdateEmitter;
 
     @InjectMock
-    private SocialRepository socialRepository;
+    private SocialMessageHandlerRepository socialMessageHandlerRepository;
 
     @Test
     void testAddRemoveFriend() {
         int otherId = 2;
-        socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SocialAddRequest("", otherId, null)));
+        socialMessageHandler.handleSocialRequest(
+                createInboundMessage(new SocialMessage.SocialAddRequest("", otherId, null)));
 
-        verify(socialRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
+        verify(socialMessageHandlerRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
             assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), friendOrFoeEntity.getId());
             assertEquals(FriendOrFoeEntity.Status.FRIEND, friendOrFoeEntity.getStatus());
         }));
 
-        socialHandler.handleSocialRequest(
+        socialMessageHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", otherId, null)));
 
-        verify(socialRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
+        verify(socialMessageHandlerRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
     }
 
     @Test
     void testAddRemoveFoe() {
         int otherId = 2;
-        socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SocialAddRequest("", null, otherId)));
+        socialMessageHandler.handleSocialRequest(
+                createInboundMessage(new SocialMessage.SocialAddRequest("", null, otherId)));
 
-        verify(socialRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
+        verify(socialMessageHandlerRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
             assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), friendOrFoeEntity.getId());
             assertEquals(FriendOrFoeEntity.Status.FOE, friendOrFoeEntity.getStatus());
         }));
 
-        socialHandler.handleSocialRequest(
+        socialMessageHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", null, otherId)));
 
-        verify(socialRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
+        verify(socialMessageHandlerRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
     }
 
     @Test
@@ -74,11 +76,11 @@ class SocialHandlerTest {
         String url = "temp";
         String description = "temporary";
 
-        when(socialRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(
+        when(socialMessageHandlerRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(
                 List.of(new AvatarInfo(url, description)));
 
         String requestId = "12345";
-        socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.ListAvatarsRequest(requestId)));
+        socialMessageHandler.handleSocialRequest(createInboundMessage(new SocialMessage.ListAvatarsRequest(requestId)));
 
         verify(outboundLobbyMessageEmitter).send(OutboundLobbyMessage.forSession(SESSION_ID,
                                                                                  new SocialMessage.AvatarInfoList(
@@ -91,18 +93,18 @@ class SocialHandlerTest {
     void testSelectAvatar() {
         int avatarId = 4;
         String url = "new";
-        when(socialRepository.updateSelectedAvatar(PLAYER_ID, url)).thenReturn(avatarId);
+        when(socialMessageHandlerRepository.updateSelectedAvatar(PLAYER_ID, url)).thenReturn(avatarId);
 
-        socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SelectAvatarRequest("", url)));
+        socialMessageHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SelectAvatarRequest("", url)));
 
         verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, avatarId));
     }
 
     @Test
     void testRemoveAvatar() {
-        socialHandler.handleSocialRequest(createInboundMessage(new SocialMessage.RemoveAvatarRequest("")));
+        socialMessageHandler.handleSocialRequest(createInboundMessage(new SocialMessage.RemoveAvatarRequest("")));
 
-        verify(socialRepository).removeSelectedAvatar(PLAYER_ID);
+        verify(socialMessageHandlerRepository).removeSelectedAvatar(PLAYER_ID);
         verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, null));
     }
 
