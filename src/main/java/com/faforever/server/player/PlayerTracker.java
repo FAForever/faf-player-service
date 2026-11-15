@@ -14,6 +14,10 @@ import com.faforever.server.message.service.OutboundLobbyMessage;
 import com.faforever.server.message.service.PlayerAvatarUpdate;
 import com.faforever.server.message.service.PlayerSessionState;
 import com.faforever.server.micrometer.PlayerSessionStateResolver;
+import com.faforever.server.player.dto.Avatar;
+import com.faforever.server.player.dto.FriendOrFoe;
+import com.faforever.server.player.dto.LeaderboardRating;
+import com.faforever.server.player.dto.PlayerLeaderboardRating;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.aop.MeterTag;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -295,8 +299,8 @@ class PlayerTracker {
                                                                                               playerIds, currentRatingUpdateTime)
                                                                                         .stream()
                                                                                         .collect(Collectors.groupingBy(
-                                                                                              PlayerLeaderboardRating::playerId,
-                                                                                              Collectors.mapping(
+                                                                                                PlayerLeaderboardRating::playerId,
+                                                                                                Collectors.mapping(
                                                                                                       PlayerLeaderboardRating::leaderboardRating,
                                                                                                       Collectors.toSet())));
 

@@ -1,8 +1,8 @@
-package com.faforever.server.player;
+package com.faforever.server.player.dto;
 
 import com.faforever.server.domain.FriendOrFoeEntity;
 
-record FriendOrFoe(
+public record FriendOrFoe(
         FriendOrFoeEntity.Status status,
         int subjectId
 ) {

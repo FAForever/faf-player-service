@@ -1,5 +1,7 @@
 package com.faforever.server.player;
 
+import com.faforever.server.player.dto.Avatar;
+import com.faforever.server.player.dto.LeaderboardRating;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;

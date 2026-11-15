@@ -1,5 +1,9 @@
 package com.faforever.server.player;
 
+import com.faforever.server.player.dto.Avatar;
+import com.faforever.server.player.dto.FriendOrFoe;
+import com.faforever.server.player.dto.LeaderboardRating;
+import com.faforever.server.player.dto.PlayerLeaderboardRating;
 import jakarta.data.repository.Query;
 import jakarta.data.repository.Repository;
 import jakarta.transaction.Transactional;

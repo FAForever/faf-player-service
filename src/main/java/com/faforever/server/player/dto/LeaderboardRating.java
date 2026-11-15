@@ -1,6 +1,6 @@
-package com.faforever.server.player;
+package com.faforever.server.player.dto;
 
-record LeaderboardRating(
+public record LeaderboardRating(
         String leaderboard,
         int totalGames,
         double mean,
