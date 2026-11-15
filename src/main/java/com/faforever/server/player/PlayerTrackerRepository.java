@@ -37,7 +37,7 @@ interface PlayerTrackerRepository {
     boolean isPlayerModerator(int playerId);
 
     @Query("""
-           select new PlayerLeaderboardRating(lr.playerId, new com.faforever.server.player.LeaderboardRating(lr.leaderboard.technicalName, lr.totalGames, lr.mean, lr.deviation))
+           select new PlayerLeaderboardRating(lr.playerId, new com.faforever.server.player.dto.LeaderboardRating(lr.leaderboard.technicalName, lr.totalGames, lr.mean, lr.deviation))
            from LeaderboardRatingEntity lr
            where lr.playerId in :playerIds and lr.updateTime >= :timeCutoff
            """)
