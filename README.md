@@ -33,6 +33,7 @@ player state** (online status, active sessions, leaderboard ratings, avatars, co
   - [Database Version Check](#database-version-check)
 - [Building & Running](#building--running)
   - [Prerequisites](#prerequisites)
+  - [Local Environment](#local-environment)
   - [Development Mode](#development-mode)
   - [Running Tests](#running-tests)
   - [Packaging & Docker](#packaging--docker)
@@ -290,7 +291,15 @@ On startup the service reads the version of the latest successful migration from
 
 - **Java 25+** (e.g., Eclipse Temurin JDK 25)
 - **MariaDB** with the FAF database schema and **RabbitMQ**. Quarkus Dev Services are disabled, so both must be provided
-  (e.g. via Docker).
+  (see [Local Environment](#local-environment)).
+
+### Local Environment
+
+Use [FAForever/gitops-stack](https://github.com/FAForever/gitops-stack) to run the rest of the FAF stack (MariaDB,
+RabbitMQ, the lobby server, etc.) for local development. Configure the stack to run `faf-player-service` as **local**,
+so the stack does not deploy its own instance and the service started from this repository (e.g. via
+`./gradlew quarkusDev`) is used instead. Refer to the gitops-stack README for how to set up the stack and mark a
+service as local.
 
 ### Development Mode
 
