@@ -22,13 +22,13 @@ class AdminMessageHandler {
 
     private final Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
 
-    private final AdminRepository adminRepository;
+    private final AdminMessageHandlerRepository adminMessageHandlerRepository;
 
     AdminMessageHandler(
             @Channel("lobby-outbound") Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter,
-            AdminRepository adminRepository) {
+            AdminMessageHandlerRepository adminMessageHandlerRepository) {
         this.outboundLobbyMessageEmitter = outboundLobbyMessageEmitter;
-        this.adminRepository = adminRepository;
+        this.adminMessageHandlerRepository = adminMessageHandlerRepository;
     }
 
     @Incoming("admin-inbound")
@@ -51,7 +51,7 @@ class AdminMessageHandler {
             return;
         }
 
-        if (adminRepository.playerLacksPermission(playerId, "ADMIN_BROADCAST_MESSAGE")) {
+        if (adminMessageHandlerRepository.playerLacksPermission(playerId, "ADMIN_BROADCAST_MESSAGE")) {
             LOG.warn("Unauthorized broadcast request: {}", broadcastRequest.message());
             return;
         }
@@ -62,7 +62,7 @@ class AdminMessageHandler {
     }
 
     private void kickPlayer(int playerId, AdminMessage.KickPlayerRequest kickPlayerRequest) {
-        if (adminRepository.playerLacksPermission(playerId, "ADMIN_KICK_SERVER")) {
+        if (adminMessageHandlerRepository.playerLacksPermission(playerId, "ADMIN_KICK_SERVER")) {
             LOG.warn("Unauthorized kick request with target: {}", kickPlayerRequest.playerId());
             return;
         }
@@ -74,7 +74,7 @@ class AdminMessageHandler {
     }
 
     private void closePlayerGame(int playerId, AdminMessage.ClosePlayerGameRequest closePlayerGameRequest) {
-        if (adminRepository.playerLacksPermission(playerId, "ADMIN_KICK_SERVER")) {
+        if (adminMessageHandlerRepository.playerLacksPermission(playerId, "ADMIN_KICK_SERVER")) {
             LOG.warn("Unauthorized close request with target: {}", closePlayerGameRequest.playerId());
             return;
         }

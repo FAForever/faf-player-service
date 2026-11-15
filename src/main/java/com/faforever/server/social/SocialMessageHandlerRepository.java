@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-interface SocialRepository {
+interface SocialMessageHandlerRepository {
 
     @Transactional
     @Query("select new AvatarInfo(a.avatar.url, a.avatar.description) from AssignedAvatarEntity a where a.playerId = :playerId and (a.expirationDate is null or a.expirationDate > current_timestamp)")

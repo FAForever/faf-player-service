@@ -26,7 +26,7 @@ class AdminMessageHandlerTest {
     @InjectMock
     private Emitter<OutboundLobbyMessage<LobbyMessage.Server>> outboundLobbyMessageEmitter;
     @InjectMock
-    private AdminRepository adminRepository;
+    private AdminMessageHandlerRepository adminMessageHandlerRepository;
 
     @Test
     void testBroadcast() {
@@ -40,12 +40,12 @@ class AdminMessageHandlerTest {
     void testBroadcastNoMessage() {
         socialService.handleAdminRequest(createInboundMessage(new AdminMessage.BroadcastRequest("", "")));
 
-        verifyNoInteractions(adminRepository, outboundLobbyMessageEmitter);
+        verifyNoInteractions(adminMessageHandlerRepository, outboundLobbyMessageEmitter);
     }
 
     @Test
     void testBroadcastNoPermission() {
-        when(adminRepository.playerLacksPermission(PLAYER_ID, "ADMIN_BROADCAST_MESSAGE")).thenReturn(
+        when(adminMessageHandlerRepository.playerLacksPermission(PLAYER_ID, "ADMIN_BROADCAST_MESSAGE")).thenReturn(
                 true);
 
         socialService.handleAdminRequest(createInboundMessage(new AdminMessage.BroadcastRequest("", "test")));
@@ -63,7 +63,7 @@ class AdminMessageHandlerTest {
 
     @Test
     void testKickNoPermission() {
-        when(adminRepository.playerLacksPermission(PLAYER_ID, "ADMIN_KICK_SERVER")).thenReturn(true);
+        when(adminMessageHandlerRepository.playerLacksPermission(PLAYER_ID, "ADMIN_KICK_SERVER")).thenReturn(true);
 
         socialService.handleAdminRequest(createInboundMessage(new AdminMessage.KickPlayerRequest("", 2)));
 
@@ -80,7 +80,7 @@ class AdminMessageHandlerTest {
 
     @Test
     void testCloseGameNoPermission() {
-        when(adminRepository.playerLacksPermission(PLAYER_ID, "ADMIN_KICK_SERVER")).thenReturn(true);
+        when(adminMessageHandlerRepository.playerLacksPermission(PLAYER_ID, "ADMIN_KICK_SERVER")).thenReturn(true);
 
         socialService.handleAdminRequest(createInboundMessage(new AdminMessage.ClosePlayerGameRequest("", 2)));
 

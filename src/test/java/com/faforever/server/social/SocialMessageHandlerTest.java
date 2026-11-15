@@ -35,7 +35,7 @@ class SocialMessageHandlerTest {
     private Emitter<PlayerAvatarUpdate> outboundAvatarUpdateEmitter;
 
     @InjectMock
-    private SocialRepository socialRepository;
+    private SocialMessageHandlerRepository socialMessageHandlerRepository;
 
     @Test
     void testAddRemoveFriend() {
@@ -43,7 +43,7 @@ class SocialMessageHandlerTest {
         socialMessageHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialAddRequest("", otherId, null)));
 
-        verify(socialRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
+        verify(socialMessageHandlerRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
             assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), friendOrFoeEntity.getId());
             assertEquals(FriendOrFoeEntity.Status.FRIEND, friendOrFoeEntity.getStatus());
         }));
@@ -51,7 +51,7 @@ class SocialMessageHandlerTest {
         socialMessageHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", otherId, null)));
 
-        verify(socialRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
+        verify(socialMessageHandlerRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
     }
 
     @Test
@@ -60,7 +60,7 @@ class SocialMessageHandlerTest {
         socialMessageHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialAddRequest("", null, otherId)));
 
-        verify(socialRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
+        verify(socialMessageHandlerRepository).upsertPlayerRelationship(assertArg(friendOrFoeEntity -> {
             assertEquals(new FriendOrFoeEntity.Id(PLAYER_ID, otherId), friendOrFoeEntity.getId());
             assertEquals(FriendOrFoeEntity.Status.FOE, friendOrFoeEntity.getStatus());
         }));
@@ -68,7 +68,7 @@ class SocialMessageHandlerTest {
         socialMessageHandler.handleSocialRequest(
                 createInboundMessage(new SocialMessage.SocialRemoveRequest("", null, otherId)));
 
-        verify(socialRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
+        verify(socialMessageHandlerRepository).deletePlayerRelationship(new FriendOrFoeEntity.Id(PLAYER_ID, otherId));
     }
 
     @Test
@@ -76,7 +76,7 @@ class SocialMessageHandlerTest {
         String url = "temp";
         String description = "temporary";
 
-        when(socialRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(
+        when(socialMessageHandlerRepository.findAssignedAvatarsByPlayer(PLAYER_ID)).thenReturn(
                 List.of(new AvatarInfo(url, description)));
 
         String requestId = "12345";
@@ -93,7 +93,7 @@ class SocialMessageHandlerTest {
     void testSelectAvatar() {
         int avatarId = 4;
         String url = "new";
-        when(socialRepository.updateSelectedAvatar(PLAYER_ID, url)).thenReturn(avatarId);
+        when(socialMessageHandlerRepository.updateSelectedAvatar(PLAYER_ID, url)).thenReturn(avatarId);
 
         socialMessageHandler.handleSocialRequest(createInboundMessage(new SocialMessage.SelectAvatarRequest("", url)));
 
@@ -104,7 +104,7 @@ class SocialMessageHandlerTest {
     void testRemoveAvatar() {
         socialMessageHandler.handleSocialRequest(createInboundMessage(new SocialMessage.RemoveAvatarRequest("")));
 
-        verify(socialRepository).removeSelectedAvatar(PLAYER_ID);
+        verify(socialMessageHandlerRepository).removeSelectedAvatar(PLAYER_ID);
         verify(outboundAvatarUpdateEmitter).send(new PlayerAvatarUpdate(PLAYER_ID, null));
     }
 
