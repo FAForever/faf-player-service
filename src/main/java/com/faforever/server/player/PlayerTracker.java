@@ -96,7 +96,8 @@ class PlayerTracker {
                                                       .stream()
                                                       .map(SessionDetails::getExpirationTime)
                                                       .filter(instant -> instant.isAfter(clock.instant()))
-                                                      .count()).register(meterRegistry);
+                                                      .count())
+             .tag("state", "expired").register(meterRegistry);
     }
 
     @PostConstruct
