@@ -28,6 +28,7 @@ class Player {
     @Getter
     private @Nullable Avatar avatar;
 
+    private final Set<Long> sessionIds = ConcurrentHashMap.newKeySet();
     private final Map<String, LeaderboardRating> leaderboardRatings = new ConcurrentHashMap<>();
 
     Player(int id, String username, @Nullable String clan, @Nullable String avatarUrl,
@@ -63,5 +64,21 @@ class Player {
         }
 
         this.avatar = null;
+    }
+
+    void addSession(long sessionId) {
+        sessionIds.add(sessionId);
+    }
+
+    void removeSession(long sessionId) {
+        sessionIds.remove(sessionId);
+    }
+
+    boolean hasAnySession() {
+        return !sessionIds.isEmpty();
+    }
+
+    boolean hasSession(long sessionId) {
+        return sessionIds.contains(sessionId);
     }
 }
