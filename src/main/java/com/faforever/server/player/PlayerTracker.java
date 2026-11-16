@@ -64,8 +64,8 @@ class PlayerTracker {
 
     private final String defaultChannelName;
 
-    @Getter
     private final Map<Integer, Player> playerIdMap;
+
     @Getter
     private final Map<Long, SessionDetails> sessionMap;
     @Getter
