@@ -27,7 +27,6 @@ import io.quarkus.scheduler.Scheduled;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
-import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
@@ -65,11 +64,11 @@ class PlayerTracker {
 
     private final String defaultChannelName;
 
-    @Getter(AccessLevel.PACKAGE)
+    @Getter
     private final Map<Integer, Player> playerIdMap;
-    @Getter(AccessLevel.PACKAGE)
+    @Getter
     private final Map<Long, SessionDetails> sessionMap;
-    @Getter(AccessLevel.PACKAGE)
+    @Getter
     private final Map<Integer, PlayerInfo> dirtyPlayerInfoIdMap;
 
     private Instant lastRatingUpdateTime = Instant.now();
